@@ -63,7 +63,7 @@ uvx worklog-mcp --web-port 3000
 uvx /path/to/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl
 
 # Git リポジトリから直接実行
-uvx git+https://github.com/your-username/worklog-mcp.git
+uvx --from git+https://github.com/Yuri-Odagiri/worklog-mcp.git worklog-mcp
 ```
 
 **uvx vs uv の違い:**
@@ -267,7 +267,27 @@ open http://localhost:8080
 - Windows: `C:/Users/username/dev/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl`
 - macOS/Linux: `/home/username/dev/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl`
 
-### 方法3: PyPI公開後
+### 方法3: Gitリポジトリから直接実行
+
+公開されたGitリポジトリから直接実行：
+
+```json
+{
+  "mcpServers": {
+    "worklog": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/Yuri-Odagiri/worklog-mcp.git", "worklog-mcp", "--no-web"],
+      "env": {
+        "WORKLOG_DB_PATH": "~/.worklog"
+      }
+    }
+  }
+}
+```
+
+**注意**: `--from`オプションを使用することで、PyPI公開前でもGitリポジトリから直接実行できます。
+
+### 方法4: PyPI公開後
 
 PyPI公開後の実行：
 
@@ -278,7 +298,7 @@ PyPI公開後の実行：
       "command": "uvx",
       "args": ["worklog-mcp", "--no-web"],
       "env": {
-        "WORKLOG_DB_PATH": "~/.worklog/database.db"
+        "WORKLOG_DB_PATH": "~/.worklog"
       }
     }
   }
@@ -461,10 +481,10 @@ uv run ruff format src/
 
 ```bash
 # MCP機能のテスト（パッケージ版）
-uvx mcp-inspector uvx worklog-mcp --no-web
+npx @modelcontextprotocol/inspector uvx worklog-mcp --no-web
 
 # 開発版でのテスト
-uvx mcp-inspector uv run python -m worklog_mcp --no-web
+npx @modelcontextprotocol/inspector uv run python -m worklog_mcp --no-web
 ```
 
 ### Webサーバーのテスト
@@ -576,7 +596,7 @@ uv run python -m worklog_mcp
 uv run python -m worklog_mcp --no-web
 
 # MCPインスペクターでテスト
-uvx mcp-inspector uv run python -m worklog_mcp --no-web
+npx @modelcontextprotocol/inspector uv run python -m worklog_mcp --no-web
 
 # Webサーバーのログ確認
 uv run python -m worklog_mcp --web-port 8080
