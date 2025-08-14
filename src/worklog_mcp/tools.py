@@ -1,7 +1,10 @@
 """MCPツールの実装"""
 
+import logging
+import functools
+import json
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable
 import re
 
 from mcp.server.fastmcp import FastMCP, Context
@@ -9,6 +12,57 @@ from mcp.server.fastmcp import FastMCP, Context
 from .database import Database
 from .project_context import ProjectContext
 from .models import User, WorklogEntry
+
+logger = logging.getLogger(__name__)
+
+
+def log_mcp_tool(func: Callable) -> Callable:
+    """MCPツールのリクエストとレスポンスをロギングするデコレータ"""
+
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        tool_name = func.__name__
+
+        # リクエストのログ出力（機密情報を除外）
+        sanitized_kwargs = {}
+        for key, value in kwargs.items():
+            if key in ["password", "token", "secret"]:
+                sanitized_kwargs[key] = "[REDACTED]"
+            elif isinstance(value, str) and len(value) > 200:
+                sanitized_kwargs[key] = f"{value[:200]}... (truncated)"
+            else:
+                sanitized_kwargs[key] = value
+
+        logger.info(
+            f"MCP Tool Request - {tool_name}: args={args[:2]}, kwargs={sanitized_kwargs}"
+        )
+
+        try:
+            # ツール実行
+            result = await func(*args, **kwargs)
+
+            # レスポンスのログ出力（大きなレスポンスは省略）
+            if isinstance(result, (dict, list)):
+                result_preview = json.dumps(result, ensure_ascii=False, default=str)[
+                    :1000
+                ]
+                if len(str(result)) > 1000:
+                    result_preview += "... (truncated)"
+                logger.info(f"MCP Tool Response - {tool_name}: {result_preview}")
+            elif isinstance(result, str) and len(result) > 1000:
+                logger.info(
+                    f"MCP Tool Response - {tool_name}: {result[:1000]}... (truncated)"
+                )
+            else:
+                logger.info(f"MCP Tool Response - {tool_name}: {result}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"MCP Tool Error - {tool_name}: {type(e).__name__}: {str(e)}")
+            raise
+
+    return wrapper
 
 
 def register_tools(
@@ -39,6 +93,7 @@ def register_tools(
         name="register_user",
         description="新規ユーザーを分報システムに登録します。初回起動時にのみ必要で、ユーザーID、表示名、テーマカラー、役割(日本語)、性格(200字程度)、外見(性別、年齢、髪の色、肌の色等詳細に500文字程度)を設定できます。",
     )
+    @log_mcp_tool
     async def register_user(
         user_id: str,
         name: str,
@@ -114,6 +169,7 @@ def register_tools(
             await ctx.error(f"予期しないエラー: {str(e)}")
             raise
 
+    @log_mcp_tool
     async def check_avatar_status(user_id: str, ctx: Context) -> str:
         """アバター生成状況を確認する
 
@@ -155,6 +211,7 @@ def register_tools(
         name="post_worklog",
         description="分報（作業ログ）を投稿します。Markdown形式で作業内容、進捗、メモなどを記録できます。",
     )
+    @log_mcp_tool
     async def post_entry(user_id: str, markdown_content: str, ctx: Context) -> str:
         """分報を投稿する"""
         try:
@@ -209,6 +266,7 @@ def register_tools(
         name="reply_worklog",
         description="既存の分報に返信または続報を投稿します。元の分報に関連する追加情報や返信を投稿する際に使用します。",
     )
+    @log_mcp_tool
     async def reply_to_entry(
         user_id: str, related_entry_id: str, markdown_content: str, ctx: Context
     ) -> str:
@@ -269,6 +327,7 @@ def register_tools(
         name="read_timeline",
         description="分報のタイムライン（時系列一覧）を取得します。全体または特定ユーザーの分報を時間・件数で絞り込んで表示できます。",
     )
+    @log_mcp_tool
     async def get_timeline(
         user_id: str,
         ctx: Context,
@@ -329,6 +388,7 @@ def register_tools(
         name="read_user_worklogs",
         description="特定ユーザーの最近の分報を取得します。指定した時間範囲内でそのユーザーが投稿した全ての分報を確認できます。",
     )
+    @log_mcp_tool
     async def get_recent_entries(
         user_id: str, ctx: Context, target_user_id: str, hours: int = 24
     ) -> List[Dict[str, Any]]:
@@ -383,6 +443,7 @@ def register_tools(
         name="search_worklogs",
         description="分報をキーワード検索します。特定の単語やフレーズを含む分報を検索し、ユーザーや日付範囲で絞り込むことができます。",
     )
+    @log_mcp_tool
     async def search_entries(
         user_id: str,
         ctx: Context,
@@ -459,6 +520,7 @@ def register_tools(
         name="read_worklog_thread",
         description="特定の分報とそれに関連する返信・続報をスレッド形式で取得します。会話の流れを把握したい場合に使用します。",
     )
+    @log_mcp_tool
     async def get_thread(
         user_id: str, entry_id: str, ctx: Context
     ) -> List[Dict[str, Any]]:
@@ -513,6 +575,7 @@ def register_tools(
         name="list_users",
         description="分報システムに登録されている全ユーザーの一覧を取得します。各ユーザーの基本情報とアクティビティ状況を確認できます。",
     )
+    @log_mcp_tool
     async def list_users(user_id: str, ctx: Context) -> List[Dict[str, Any]]:
         """登録ユーザー一覧を取得"""
         try:
@@ -554,6 +617,7 @@ def register_tools(
         name="get_team_status",
         description="チーム全体の現在の状況（各メンバーの最新投稿状況）を取得します。チーム全体の活動状況を一覧で確認できます。",
     )
+    @log_mcp_tool
     async def get_team_status(user_id: str, ctx: Context) -> Dict[str, Any]:
         """チーム全体の現在の状況（各メンバーの最新エントリー）"""
         try:
@@ -606,6 +670,7 @@ def register_tools(
         name="get_user_stats",
         description="特定ユーザーの分報投稿統計情報を取得します。投稿数、活動期間、最近の投稿状況などの詳細データを確認できます。",
     )
+    @log_mcp_tool
     async def get_stats(
         user_id: str, target_user_id: str, ctx: Context
     ) -> Dict[str, Any]:
@@ -651,6 +716,7 @@ def register_tools(
             await ctx.error(f"予期しないエラー: {str(e)}")
             raise
 
+    @log_mcp_tool
     async def delete_entry(user_id: str, entry_id: str, ctx: Context) -> str:
         """分報を削除する"""
         try:
@@ -696,6 +762,7 @@ def register_tools(
             await ctx.error(f"予期しないエラー: {str(e)}")
             raise
 
+    @log_mcp_tool
     async def truncate_entries(
         user_id: str, ctx: Context, target_user_id: Optional[str] = None
     ) -> str:
@@ -750,6 +817,7 @@ def register_tools(
         name="generate_worklog_summary",
         description="指定した期間の分報をサマリーとして要約します。チーム全体または特定ユーザーの活動をまとめて確認したい場合に使用します。",
     )
+    @log_mcp_tool
     async def generate_summary(
         user_id: str, ctx: Context, target_user_id: Optional[str] = None, hours: int = 8
     ) -> Dict[str, Any]:
