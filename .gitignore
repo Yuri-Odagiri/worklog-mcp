@@ -148,3 +148,22 @@ uv.lock
 
 # Worklog specific
 .worklog/
+
+# Claude Code specific files
+CLAUDE.md
+.claude/
+
+# Serena tool specific files
+.serena/
+
+# MCP configuration (project-specific)
+.mcp.json
+
+# Ruff cache
+.ruff_cache/
+
+# Architecture and design documents (optional - uncomment if needed)
+# ARCHITECTURE.md
+# DATABASE_ERD.md
+# DESIGN_SPEC.md
+# MCP_TOOLS_IMPLEMENTATION.md
