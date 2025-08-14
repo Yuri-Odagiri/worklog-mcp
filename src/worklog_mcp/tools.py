@@ -660,6 +660,109 @@ def register_tools(
             raise
 
     @mcp.tool(
+        name="delete_worklog",
+        description="指定したIDの分報を削除します。投稿者本人または管理者のみ削除可能です。削除は元に戻せないので注意して使用してください。",
+    )
+    async def delete_entry(user_id: str, entry_id: str, ctx: Context) -> str:
+        """分報を削除する"""
+        try:
+            # ユーザー存在確認
+            user = await db.get_user(user_id)
+            if not user:
+                raise ValueError(f"ユーザーID '{user_id}' が見つかりません")
+
+            if not entry_id:
+                raise ValueError("entry_idは必須です")
+
+            # 削除対象エントリーの存在確認
+            entry = await db.get_entry(entry_id)
+            if not entry:
+                raise ValueError(f"エントリーID '{entry_id}' が見つかりません")
+
+            # 削除権限チェック（投稿者本人のみ削除可能）
+            if entry.user_id != user_id:
+                raise ValueError("自分の投稿のみ削除できます")
+
+            await ctx.info(f"エントリー '{entry_id}' を削除中...")
+
+            # エントリー削除
+            deleted = await db.delete_entry(entry_id)
+
+            if not deleted:
+                raise ValueError("削除に失敗しました")
+
+            # Web側に通知（Webサーバーが起動している場合のみ）
+            if web_server:
+                await web_server.notify_clients(
+                    "entry_deleted",
+                    {"id": entry_id, "user_id": user_id},
+                )
+
+            await ctx.info(f"エントリー '{entry_id}' が削除されました")
+            return f"分報 (ID: {entry_id}) を削除しました"
+
+        except ValueError as e:
+            await ctx.error(f"エラー: {str(e)}")
+            raise
+        except Exception as e:
+            await ctx.error(f"予期しないエラー: {str(e)}")
+            raise
+
+    @mcp.tool(
+        name="truncate_worklogs",
+        description="分報データベースの全データを削除します。このオプションはデータを完全に消去するため、十分注意して使用してください。復旧はできません。",
+    )
+    async def truncate_entries(
+        user_id: str, ctx: Context, target_user_id: Optional[str] = None
+    ) -> str:
+        """分報の全削除（オプションで特定ユーザーのみ）"""
+        try:
+            # 呼び出し元ユーザー存在確認
+            caller_user = await db.get_user(user_id)
+            if not caller_user:
+                raise ValueError(f"ユーザーID '{user_id}' が見つかりません")
+
+            if target_user_id:
+                # 特定ユーザーの分報削除（自分の投稿のみ）
+                if target_user_id != user_id:
+                    raise ValueError("自分の投稿のみ削除できます")
+
+                target_user = await db.get_user(target_user_id)
+                if not target_user:
+                    raise ValueError(f"ユーザーID '{target_user_id}' が見つかりません")
+
+                await ctx.info(f"ユーザー '{target_user.name}' の全分報を削除中...")
+                deleted_count = await db.truncate_entries(target_user_id)
+
+                message = f"ユーザー '{target_user.name}' の分報 {deleted_count} 件を削除しました"
+            else:
+                # 全分報削除（管理機能として実装、現在は自分の投稿のみに制限）
+                await ctx.info("自分の全分報を削除中...")
+                deleted_count = await db.truncate_entries(user_id)
+
+                message = f"あなたの分報 {deleted_count} 件を削除しました"
+
+            # Web側に通知（Webサーバーが起動している場合のみ）
+            if web_server:
+                await web_server.notify_clients(
+                    "entries_truncated",
+                    {
+                        "user_id": target_user_id or user_id,
+                        "deleted_count": deleted_count,
+                    },
+                )
+
+            await ctx.info(message)
+            return message
+
+        except ValueError as e:
+            await ctx.error(f"エラー: {str(e)}")
+            raise
+        except Exception as e:
+            await ctx.error(f"予期しないエラー: {str(e)}")
+            raise
+
+    @mcp.tool(
         name="generate_worklog_summary",
         description="指定した期間の分報をサマリーとして要約します。チーム全体または特定ユーザーの活動をまとめて確認したい場合に使用します。",
     )

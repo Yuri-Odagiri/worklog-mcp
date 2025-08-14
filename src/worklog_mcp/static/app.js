@@ -87,6 +87,14 @@ class SimpleWorklogViewer {
             case 'entry_created':
                 this.addNewEntry(event.data);
                 break;
+            case 'entry_deleted':
+                this.removeEntry(event.data.id);
+                break;
+            case 'entries_truncated':
+                this.entries = [];
+                this.render();
+                this.showNotification(`${event.data.deleted_count} 件の分報が削除されました`);
+                break;
             case 'ping':
                 // Keep-alive応答（何もしない）
                 break;
@@ -106,8 +114,18 @@ class SimpleWorklogViewer {
         }
     }
     
+    removeEntry(entryId) {
+        // エントリーをリストから削除
+        this.entries = this.entries.filter(entry => entry.id !== entryId);
+        this.render();
+        this.showNotification('分報が削除されました');
+    }
+    
     render() {
         const container = document.getElementById('entries-container');
+        
+        // サマリ情報を更新
+        this.updateSummary();
         
         if (this.entries.length === 0) {
             container.innerHTML = `
@@ -166,6 +184,7 @@ class SimpleWorklogViewer {
                 </div>
                 <div class="content">${this.escapeHtml(entry.markdown_content)}</div>
             </div>
+            <button class="delete-btn" onclick="app.confirmDeleteEntry('${entry.id}')" title="削除">🗑️</button>
         `;
         
         return div;
@@ -223,6 +242,37 @@ class SimpleWorklogViewer {
         const statusElement = document.getElementById('status');
         statusElement.textContent = text;
         statusElement.className = `status ${status}`;
+    }
+    
+    updateSummary() {
+        const summaryElement = document.getElementById('summary');
+        
+        if (this.entries.length === 0) {
+            summaryElement.innerHTML = '';
+            return;
+        }
+        
+        // ユーザー数を計算
+        const uniqueUsers = new Set(this.entries.map(entry => entry.user_id));
+        const userCount = uniqueUsers.size;
+        
+        // 今日の投稿数を計算
+        const today = new Date().toDateString();
+        const todayPosts = this.entries.filter(entry => {
+            const entryDate = new Date(entry.created_at).toDateString();
+            return entryDate === today;
+        }).length;
+        
+        // 最新投稿時間を計算
+        const latestEntry = this.entries[0]; // 既に時系列でソートされている
+        const timeSinceLatest = latestEntry ? this.formatDate(new Date(latestEntry.created_at)) : '';
+        
+        summaryElement.innerHTML = `
+            <div class="stat">📊 投稿数: ${this.entries.length}件</div>
+            <div class="stat">👥 メンバー: ${userCount}人</div>
+            <div class="stat">📅 今日: ${todayPosts}件</div>
+            ${timeSinceLatest ? `<div class="stat">⏰ 最新: ${timeSinceLatest}</div>` : ''}
+        `;
     }
     
     setupKeyboardShortcuts() {
@@ -299,6 +349,89 @@ class SimpleWorklogViewer {
         setTimeout(() => {
             document.title = originalTitle;
         }, 3000);
+    }
+    
+    async confirmDeleteEntry(entryId) {
+        if (confirm('この分報を削除しますか？\n削除は元に戻せません。')) {
+            try {
+                await this.deleteEntry(entryId);
+            } catch (error) {
+                console.error('削除エラー:', error);
+                alert('削除に失敗しました: ' + error.message);
+            }
+        }
+    }
+    
+    async deleteEntry(entryId) {
+        try {
+            const response = await fetch(`/api/entries/${entryId}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || `HTTP ${response.status}`);
+            }
+            
+            // エントリーをUIから削除
+            const entryElement = document.querySelector(`[data-entry-id="${entryId}"]`);
+            if (entryElement) {
+                entryElement.remove();
+            }
+            
+            this.showNotification('分報を削除しました');
+            
+        } catch (error) {
+            throw error;
+        }
+    }
+    
+    async confirmTruncateAll() {
+        const confirmed = confirm(
+            '全ての分報を削除しますか？\n' +
+            'この操作は元に戻せません。\n' +
+            '本当に削除する場合は「OK」を押してください。'
+        );
+        
+        if (confirmed) {
+            const doubleConfirmed = confirm(
+                '本当によろしいですか？\n' +
+                '全データが完全に削除されます。'
+            );
+            
+            if (doubleConfirmed) {
+                try {
+                    await this.truncateAllEntries();
+                } catch (error) {
+                    console.error('全削除エラー:', error);
+                    alert('全削除に失敗しました: ' + error.message);
+                }
+            }
+        }
+    }
+    
+    async truncateAllEntries() {
+        try {
+            const response = await fetch('/api/entries', {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || `HTTP ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            // UIをクリア
+            this.entries = [];
+            this.render();
+            
+            this.showNotification(result.message || '全ての分報を削除しました');
+            
+        } catch (error) {
+            throw error;
+        }
     }
 }
 

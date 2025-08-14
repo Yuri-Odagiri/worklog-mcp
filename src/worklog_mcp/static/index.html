@@ -26,16 +26,27 @@
             border-radius: 4px; cursor: pointer; 
         }
         .search-box button:hover { background: #0056b3; }
+        .status-row {
+            display: flex; justify-content: space-between; 
+            align-items: center; flex-wrap: wrap; gap: 10px;
+        }
         .status { 
             padding: 6px 12px; border-radius: 4px; 
             font-size: 0.9em; display: inline-block; 
         }
         .status.connected { background: #d4edda; color: #155724; }
         .status.disconnected { background: #f8d7da; color: #721c24; }
+        .summary {
+            font-size: 0.85em; color: #6c757d;
+            display: flex; gap: 15px; flex-wrap: wrap;
+        }
+        .summary .stat {
+            display: flex; align-items: center; gap: 4px;
+        }
         .entry { 
             background: white; margin: 15px 0; padding: 20px; 
             border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
-            display: flex; gap: 15px;
+            display: flex; gap: 15px; position: relative;
         }
         .avatar {
             width: 48px; height: 48px; border-radius: 50%;
@@ -51,7 +62,8 @@
         .entry-header { 
             display: flex; justify-content: space-between; 
             align-items: center; margin-bottom: 12px; 
-            border-bottom: 1px solid #eee; padding-bottom: 8px; 
+            border-bottom: 1px solid #eee; padding-bottom: 8px;
+            padding-right: 50px;
         }
         .user-name { font-weight: 600; color: #495057; }
         .user-role { 
@@ -84,6 +96,32 @@
             padding-left: 15px;
             margin-top: 10px;
         }
+        .delete-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            font-size: 14px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        .entry:hover .delete-btn {
+            opacity: 0.7;
+        }
+        .delete-btn:hover {
+            opacity: 1 !important;
+            background: #c82333;
+        }
     </style>
 </head>
 <body>
@@ -94,8 +132,12 @@
                 <input type="text" id="search" placeholder="検索キーワードを入力...">
                 <button onclick="app.search()">🔍 検索</button>
                 <button onclick="app.load()">🔄 更新</button>
+                <button onclick="app.confirmTruncateAll()" style="background: #dc3545; margin-left: 20px;">🗑️ 全削除</button>
             </div>
-            <div class="status" id="status">接続中...</div>
+            <div class="status-row">
+                <div class="status" id="status">接続中...</div>
+                <div class="summary" id="summary"></div>
+            </div>
         </div>
         
         <div id="entries-container">

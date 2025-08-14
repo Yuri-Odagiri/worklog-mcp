@@ -229,6 +229,29 @@ class Database:
             await db.commit()
             return cursor.rowcount > 0
 
+    async def delete_entry(self, entry_id: str) -> bool:
+        """エントリー削除"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM entries WHERE id = ?",
+                (entry_id,),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def truncate_entries(self, user_id: Optional[str] = None) -> int:
+        """エントリー全削除（オプションで特定ユーザーのみ）"""
+        async with aiosqlite.connect(self.db_path) as db:
+            if user_id:
+                cursor = await db.execute(
+                    "DELETE FROM entries WHERE user_id = ?",
+                    (user_id,),
+                )
+            else:
+                cursor = await db.execute("DELETE FROM entries")
+            await db.commit()
+            return cursor.rowcount
+
     async def get_timeline(
         self,
         user_id: Optional[str] = None,

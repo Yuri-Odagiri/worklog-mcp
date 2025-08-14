@@ -132,6 +132,14 @@ class WebDatabaseAdapter:
 
         return result
 
+    async def delete_entry_for_api(self, entry_id: str) -> bool:
+        """エントリー削除（Web API用）"""
+        return await self.db.delete_entry(entry_id)
+
+    async def truncate_entries_for_api(self) -> int:
+        """全エントリー削除（Web API用）"""
+        return await self.db.truncate_entries()
+
 
 class WebUIServer:
     """分報Web UIサーバークラス"""
@@ -215,6 +223,43 @@ class WebUIServer:
             return JSONResponse(
                 status_code=404, content={"error": "リソースが見つかりません"}
             )
+
+        @self.app.delete("/api/entries/{entry_id}")
+        async def delete_entry(entry_id: str):
+            """エントリー削除"""
+            try:
+                result = await self.db_adapter.delete_entry_for_api(entry_id)
+                if not result:
+                    raise HTTPException(404, "エントリーが見つかりません")
+
+                # クライアントに削除通知
+                await self.notify_clients("entry_deleted", {"id": entry_id})
+
+                return {"success": True, "message": "エントリーを削除しました"}
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"API Error in delete_entry: {e}")
+                raise HTTPException(status_code=500, detail="エントリー削除エラー")
+
+        @self.app.delete("/api/entries")
+        async def truncate_entries():
+            """全エントリー削除"""
+            try:
+                deleted_count = await self.db_adapter.truncate_entries_for_api()
+
+                # クライアントに全削除通知
+                await self.notify_clients(
+                    "entries_truncated", {"deleted_count": deleted_count}
+                )
+
+                return {
+                    "success": True,
+                    "message": f"{deleted_count} 件のエントリーを削除しました",
+                }
+            except Exception as e:
+                logger.error(f"API Error in truncate_entries: {e}")
+                raise HTTPException(status_code=500, detail="全エントリー削除エラー")
 
     def _setup_static_files(self):
         """静的ファイル設定"""
