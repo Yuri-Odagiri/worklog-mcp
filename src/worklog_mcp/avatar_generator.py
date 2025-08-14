@@ -28,12 +28,20 @@ async def generate_openai_avatar(
     Returns:
         生成された画像ファイルのパス（失敗時はNone）
     """
+    import logging
+    import time
+
+    logger = logging.getLogger(__name__)
+
     try:
         from openai import OpenAI
 
         # 環境変数からAPIキーを取得
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
+            logger.info(
+                "OpenAI APIキーが設定されていません。フォールバックでグラデーション画像を使用します。"
+            )
             return None
 
         prompt = f"""
@@ -53,7 +61,12 @@ async def generate_openai_avatar(
 {appearance}
 """
 
+        logger.info(f"OpenAI API呼び出し開始 - ユーザー: {name} (ID: {user_id})")
+        logger.debug(f"OpenAI APIプロンプト: {prompt}")
+
         client = OpenAI(api_key=api_key)
+
+        start_time = time.time()
         response = client.responses.create(
             model="gpt-5",
             input=prompt,
@@ -66,6 +79,9 @@ async def generate_openai_avatar(
                 }
             ],
         )
+        end_time = time.time()
+
+        logger.info(f"OpenAI API呼び出し完了 - 時間: {end_time - start_time:.2f}秒")
 
         image_data = [
             output.result
@@ -74,22 +90,28 @@ async def generate_openai_avatar(
         ]
 
         if not image_data:
+            logger.warning("OpenAI APIから画像データが返されませんでした")
             return None
 
         image_base64 = image_data[0]
+        logger.debug(f"受信した画像データサイズ: {len(image_base64)} bytes (base64)")
 
         # プロジェクト専用のアバターディレクトリパスを取得
         avatar_dir = Path(project_context.get_avatar_path())
 
         avatar_path = avatar_dir / f"{user_id}.png"
+        logger.debug(f"アバター保存先: {avatar_path}")
 
         async with aiofiles.open(avatar_path, "wb") as f:
             await f.write(base64.b64decode(image_base64))
 
+        logger.info(f"OpenAI生成アバター保存完了: {avatar_path}")
         return str(avatar_path)
 
-    except Exception:
+    except Exception as e:
         # OpenAI APIでエラーが発生した場合はNoneを返してフォールバックに
+        logger.error(f"OpenAI API呼び出しエラー: {type(e).__name__}: {e}")
+        logger.debug("OpenAI APIエラー詳細", exc_info=True)
         return None
 
 
@@ -195,8 +217,14 @@ async def generate_user_avatar_async(
         db = Database(project_context.get_db_path())
         await db.update_user_avatar_path(user_id, avatar_path)
 
-    except Exception:
+    except Exception as e:
         # エラーが発生した場合もフォールバックを試行
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"アバター生成処理でエラーが発生: {type(e).__name__}: {e}")
+        logger.debug("アバター生成エラー詳細", exc_info=True)
+
         try:
             avatar_path = await generate_gradient_avatar(
                 theme_color, user_id, project_context
@@ -205,9 +233,13 @@ async def generate_user_avatar_async(
 
             db = Database(project_context.get_db_path())
             await db.update_user_avatar_path(user_id, avatar_path)
-        except Exception:
-            # 完全に失敗した場合は何もしない
-            pass
+            logger.info(f"フォールバック処理でアバター生成成功: {avatar_path}")
+        except Exception as fallback_error:
+            # 完全に失敗した場合
+            logger.error(
+                f"フォールバック処理も失敗: {type(fallback_error).__name__}: {fallback_error}"
+            )
+            logger.debug("フォールバック処理エラー詳細", exc_info=True)
 
 
 async def generate_user_avatar(

@@ -8,9 +8,11 @@ from mcp.server.fastmcp import FastMCP
 from .database import Database
 from .project_context import ProjectContext
 from .tools import register_tools
+from .logging_config import setup_logging
 
+# ログ設定を確実に初期化
+setup_logging()
 
-# ログ設定
 logger = logging.getLogger(__name__)
 
 

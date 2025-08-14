@@ -1,11 +1,19 @@
 """データベース層の実装"""
 
 import aiosqlite
+import os
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from .models import User, WorklogEntry
+from .logging_config import setup_logging
+
+# ログ設定を確実に初期化
+setup_logging()
+
+logger = logging.getLogger(__name__)
 
 
 class Database:
@@ -251,6 +259,58 @@ class Database:
                 cursor = await db.execute("DELETE FROM entries")
             await db.commit()
             return cursor.rowcount
+
+    async def truncate_all(
+        self, include_users: bool = False, avatar_dir: Optional[str] = None
+    ) -> dict:
+        """全データ削除（オプションでユーザーテーブルも含む）"""
+        async with aiosqlite.connect(self.db_path) as db:
+            entries_count = 0
+            users_count = 0
+            avatars_deleted = 0
+
+            # エントリーテーブルの削除
+            cursor = await db.execute("DELETE FROM entries")
+            entries_count = cursor.rowcount
+
+            # ユーザーテーブルの削除（オプション）
+            if include_users:
+                # avatarファイルを削除前に取得
+                if avatar_dir and os.path.exists(avatar_dir):
+                    cursor = await db.execute(
+                        "SELECT avatar_path FROM users WHERE avatar_path IS NOT NULL"
+                    )
+                    avatar_paths = await cursor.fetchall()
+
+                    for (avatar_path,) in avatar_paths:
+                        if avatar_path and os.path.exists(avatar_path):
+                            try:
+                                os.remove(avatar_path)
+                                avatars_deleted += 1
+                            except OSError as e:
+                                logger.warning(
+                                    f"アバターファイル削除に失敗（続行）: {avatar_path} - {e}"
+                                )
+
+                    # avatarディレクトリが空になった場合は削除
+                    try:
+                        if not os.listdir(avatar_dir):
+                            os.rmdir(avatar_dir)
+                    except OSError as e:
+                        logger.warning(
+                            f"アバターディレクトリ削除に失敗（続行）: {avatar_dir} - {e}"
+                        )
+
+                cursor = await db.execute("DELETE FROM users")
+                users_count = cursor.rowcount
+
+            await db.commit()
+            return {
+                "entries_deleted": entries_count,
+                "users_deleted": users_count if include_users else 0,
+                "avatars_deleted": avatars_deleted if include_users else 0,
+                "users_truncated": include_users,
+            }
 
     async def get_timeline(
         self,

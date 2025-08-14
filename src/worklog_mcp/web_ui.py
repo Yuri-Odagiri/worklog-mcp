@@ -243,20 +243,47 @@ class WebUIServer:
                 raise HTTPException(status_code=500, detail="エントリー削除エラー")
 
         @self.app.delete("/api/entries")
-        async def truncate_entries():
+        async def truncate_entries(request: Request):
             """全エントリー削除"""
             try:
-                deleted_count = await self.db_adapter.truncate_entries_for_api()
+                # リクエストボディを取得（オプション）
+                body = {}
+                try:
+                    body = await request.json()
+                except Exception as e:
+                    logger.debug(
+                        f"JSONボディの解析に失敗（デフォルト動作を継続）: {type(e).__name__}: {e}"
+                    )
+
+                delete_option = body.get("delete_option", "worklogs_only")
+                include_users = delete_option == "full_reset"
+
+                # 新しいtruncate_allメソッドを使用
+                avatar_dir = (
+                    self.project_context.get_avatar_path() if include_users else None
+                )
+                result = await self.db_adapter.database.truncate_all(
+                    include_users=include_users, avatar_dir=avatar_dir
+                )
 
                 # クライアントに全削除通知
                 await self.notify_clients(
-                    "entries_truncated", {"deleted_count": deleted_count}
+                    "entries_truncated",
+                    {
+                        "deleted_count": result["entries_deleted"],
+                        "users_deleted": result["users_deleted"],
+                        "avatars_deleted": result["avatars_deleted"],
+                        "delete_option": delete_option,
+                    },
                 )
 
-                return {
-                    "success": True,
-                    "message": f"{deleted_count} 件のエントリーを削除しました",
-                }
+                message = f"{result['entries_deleted']} 件の分報を削除しました"
+                if include_users and result["users_deleted"] > 0:
+                    message += f"（{result['users_deleted']} 件のユーザー情報も削除）"
+                if include_users and result["avatars_deleted"] > 0:
+                    message += f"（{result['avatars_deleted']} 件のアバター画像も削除）"
+
+                return {"success": True, "message": message, "result": result}
             except Exception as e:
                 logger.error(f"API Error in truncate_entries: {e}")
                 raise HTTPException(status_code=500, detail="全エントリー削除エラー")
@@ -332,7 +359,10 @@ class WebUIServer:
                 queue.put_nowait(event)  # ノンブロッキング
             except asyncio.QueueFull:
                 logger.warning("SSE queue full, skipping event")
-            except Exception:
+            except Exception as e:
+                logger.debug(
+                    f"SSE接続でエラーが発生（切断として処理）: {type(e).__name__}: {e}"
+                )
                 disconnected.append(queue)
 
         # 切断されたクライアントを削除

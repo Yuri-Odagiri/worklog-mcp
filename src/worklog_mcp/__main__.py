@@ -9,11 +9,10 @@ from .server import run_server, create_server
 
 
 # ログ設定
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stderr)],
-)
+from .logging_config import setup_logging
+
+# ログ設定を実行
+log_file_path = setup_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +82,10 @@ async def run_integrated_server(project_path: str, web_port: int = 8080):
         web_task.cancel()
         try:
             await asyncio.gather(mcp_task, web_task, return_exceptions=True)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                f"タスク停止処理でエラー（予期される動作）: {type(e).__name__}: {e}"
+            )
 
 
 def main():
