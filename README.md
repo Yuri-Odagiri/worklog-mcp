@@ -121,7 +121,7 @@ export WORKLOG_BASE_PATH="/custom/path"
   "mcpServers": {
     "worklog-project": {
       "command": "uv",
-      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project", "--no-web"],
+      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project"],
       "cwd": "/absolute/path/to/worklog-mcp",
       "env": {
         "WORKLOG_BASE_PATH": "~/.worklog",
@@ -192,7 +192,20 @@ uvx worklog-mcp
 
 ## Claude Desktop での設定
 
-### 方法1: 開発モード（プロジェクト分離あり）
+### 方法1: Claude Code (推奨)
+
+Claude Codeを使用してMCPサーバーを追加：
+
+```bash
+# プロジェクト分離ありで追加
+claude mcp add worklog-project -s project -- uv run python -m worklog_mcp --project /path/to/project
+
+# 現在のディレクトリをプロジェクトとして追加
+cd /path/to/your-project
+claude mcp add worklog-current -s project -- uv run python -m worklog_mcp
+```
+
+### 方法2: 手動設定（開発モード）
 
 開発環境から直接実行する場合：
 
@@ -201,12 +214,12 @@ uvx worklog-mcp
   "mcpServers": {
     "worklog-project-a": {
       "command": "uv",
-      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project-a", "--no-web"],
+      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project-a"],
       "cwd": "/absolute/path/to/worklog-mcp"
     },
     "worklog-project-b": {
       "command": "uv", 
-      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project-b", "--no-web"],
+      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project-b"],
       "cwd": "/absolute/path/to/worklog-mcp"
     }
   }
@@ -214,7 +227,6 @@ uvx worklog-mcp
 ```
 
 **注意**: 
-- Claude Desktop設定では`--no-web`オプションを使用（MCPサーバーのみ）
 - `cwd`は`worklog-mcp`プロジェクトディレクトリの絶対パス
 - `--project`引数でプロジェクトディレクトリを指定
 - 複数プロジェクトで完全にデータが分離される
@@ -232,7 +244,7 @@ uv run python -m worklog_mcp
 open http://localhost:8080
 ```
 
-### 方法2: ローカルパッケージでの実行
+### 方法3: ローカルパッケージでの実行
 
 ローカルでビルドしたパッケージを使用する場合：
 
@@ -251,7 +263,7 @@ open http://localhost:8080
 - Windows: `C:/Users/username/dev/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl`
 - macOS/Linux: `/home/username/dev/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl`
 
-### 方法3: Gitリポジトリから直接実行
+### 方法4: Gitリポジトリから直接実行
 
 公開されたGitリポジトリから直接実行：
 
@@ -267,7 +279,7 @@ open http://localhost:8080
 ```
 
 
-### 方法4: PyPI公開後
+### 方法5: PyPI公開後
 
 PyPI公開後の実行：
 
@@ -460,10 +472,10 @@ uv run ruff format src/
 
 ```bash
 # MCP機能のテスト（パッケージ版）
-npx @modelcontextprotocol/inspector uvx worklog-mcp --no-web
+npx @modelcontextprotocol/inspector uvx worklog-mcp
 
 # 開発版でのテスト
-npx @modelcontextprotocol/inspector uv run python -m worklog_mcp --no-web
+npx @modelcontextprotocol/inspector uv run python -m worklog_mcp
 ```
 
 ### Webサーバーのテスト
@@ -572,10 +584,10 @@ curl -N http://localhost:8080/events
 uv run python -m worklog_mcp
 
 # MCPサーバーのみでテスト
-uv run python -m worklog_mcp --no-web
+uv run python -m worklog_mcp
 
 # MCPインスペクターでテスト
-npx @modelcontextprotocol/inspector uv run python -m worklog_mcp --no-web
+npx @modelcontextprotocol/inspector uv run python -m worklog_mcp
 
 # Webサーバーのログ確認
 uv run python -m worklog_mcp --web-port 8080
