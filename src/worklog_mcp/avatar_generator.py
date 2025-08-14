@@ -46,7 +46,7 @@ async def generate_openai_avatar(
 
         prompt = f"""
 下記人物のバストアップの証明写真風の写真を生成してください。
-背景は透過。
+背景は白または薄いグレー。
 
 ## 名前
 {name}
@@ -67,33 +67,23 @@ async def generate_openai_avatar(
         client = OpenAI(api_key=api_key)
 
         start_time = time.time()
-        response = client.responses.create(
-            model="gpt-5",
-            input=prompt,
-            tools=[
-                {
-                    "type": "image_generation",
-                    "background": "transparent",
-                    "quality": "high",
-                    "size": "1024x1024",
-                }
-            ],
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size="1024x1024",
+            quality="hd",
+            response_format="b64_json",
+            n=1,
         )
         end_time = time.time()
 
         logger.info(f"OpenAI API呼び出し完了 - 時間: {end_time - start_time:.2f}秒")
 
-        image_data = [
-            output.result
-            for output in response.output
-            if output.type == "image_generation_call"
-        ]
-
-        if not image_data:
+        if not response.data or len(response.data) == 0:
             logger.warning("OpenAI APIから画像データが返されませんでした")
             return None
 
-        image_base64 = image_data[0]
+        image_base64 = response.data[0].b64_json
         logger.debug(f"受信した画像データサイズ: {len(image_base64)} bytes (base64)")
 
         # プロジェクト専用のアバターディレクトリパスを取得
@@ -110,7 +100,20 @@ async def generate_openai_avatar(
 
     except Exception as e:
         # OpenAI APIでエラーが発生した場合はNoneを返してフォールバックに
-        logger.error(f"OpenAI API呼び出しエラー: {type(e).__name__}: {e}")
+        error_type = type(e).__name__
+
+        # OpenAI固有のエラーの場合、より詳細な情報をログに記録
+        if hasattr(e, "code") and hasattr(e, "message"):
+            logger.error(
+                f"OpenAI API呼び出しエラー: {error_type} (code: {e.code}): {e.message}"
+            )
+        elif hasattr(e, "status_code"):
+            logger.error(
+                f"OpenAI API呼び出しエラー: {error_type} (status: {e.status_code}): {e}"
+            )
+        else:
+            logger.error(f"OpenAI API呼び出しエラー: {error_type}: {e}")
+
         logger.debug("OpenAI APIエラー詳細", exc_info=True)
         return None
 
@@ -214,7 +217,7 @@ async def generate_user_avatar_async(
         # データベースのアバターパスを更新
         from .database import Database
 
-        db = Database(project_context.get_db_path())
+        db = Database(project_context.get_database_path())
         await db.update_user_avatar_path(user_id, avatar_path)
 
     except Exception as e:
@@ -231,7 +234,7 @@ async def generate_user_avatar_async(
             )
             from .database import Database
 
-            db = Database(project_context.get_db_path())
+            db = Database(project_context.get_database_path())
             await db.update_user_avatar_path(user_id, avatar_path)
             logger.info(f"フォールバック処理でアバター生成成功: {avatar_path}")
         except Exception as fallback_error:

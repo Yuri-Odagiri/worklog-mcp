@@ -258,13 +258,20 @@ class WebUIServer:
                 delete_option = body.get("delete_option", "worklogs_only")
                 include_users = delete_option == "full_reset"
 
+                logger.debug(
+                    f"削除オプション: {delete_option}, ユーザー削除: {include_users}"
+                )
+
                 # 新しいtruncate_allメソッドを使用
                 avatar_dir = (
                     self.project_context.get_avatar_path() if include_users else None
                 )
-                result = await self.db_adapter.database.truncate_all(
+                logger.debug(f"アバターディレクトリ: {avatar_dir}")
+
+                result = await self.db_adapter.db.truncate_all(
                     include_users=include_users, avatar_dir=avatar_dir
                 )
+                logger.debug(f"削除結果: {result}")
 
                 # クライアントに全削除通知
                 await self.notify_clients(
@@ -285,7 +292,8 @@ class WebUIServer:
 
                 return {"success": True, "message": message, "result": result}
             except Exception as e:
-                logger.error(f"API Error in truncate_entries: {e}")
+                logger.error(f"API Error in truncate_entries: {type(e).__name__}: {e}")
+                logger.debug("truncate_entries エラー詳細", exc_info=True)
                 raise HTTPException(status_code=500, detail="全エントリー削除エラー")
 
     def _setup_static_files(self):
@@ -317,6 +325,15 @@ class WebUIServer:
                     status_code=200,
                     content={"message": "分報MCPサーバー Web API", "status": "running"},
                 )
+
+        # favicon.ico配信
+        @self.app.get("/favicon.ico")
+        async def serve_favicon():
+            favicon_path = os.path.join(static_path, "favicon.ico")
+            if os.path.exists(favicon_path):
+                return FileResponse(favicon_path)
+            else:
+                raise HTTPException(status_code=404, detail="Favicon not found")
 
     async def _event_stream(self, queue: asyncio.Queue):
         """SSEイベントストリーム生成"""
