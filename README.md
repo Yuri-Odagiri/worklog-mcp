@@ -522,7 +522,6 @@ curl -N http://localhost:8080/events
 
 | ツール名 | 説明 | パラメータ |
 |---------|------|-----------|
-| `get_project_info` | プロジェクト情報表示 | なし |
 | `init_project_config` | 設定ファイル作成 | `project_name?`, `description?` |
 
 ### 必須ツール

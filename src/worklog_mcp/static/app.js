@@ -182,7 +182,7 @@ class SimpleWorklogViewer {
                     </div>
                     <span class="timestamp">${formattedDate}</span>
                 </div>
-                <div class="content">${this.escapeHtml(entry.markdown_content)}</div>
+                <div class="content markdown-content">${this.renderMarkdown(entry.markdown_content)}</div>
             </div>
             <button class="delete-btn" onclick="app.confirmDeleteEntry('${entry.id}')" title="削除">🗑️</button>
         `;
@@ -328,6 +328,35 @@ class SimpleWorklogViewer {
         const div = document.createElement('div');
         div.textContent = text || '';
         return div.innerHTML.replace(/\n/g, '<br>');
+    }
+    
+    renderMarkdown(markdown) {
+        if (!markdown) return '';
+        
+        try {
+            // Markdownを設定
+            marked.setOptions({
+                breaks: true,
+                gfm: true,
+                sanitize: false // DOMPurifyを使用するため
+            });
+            
+            // MarkdownをHTMLに変換
+            const rawHtml = marked.parse(markdown);
+            
+            // DOMPurifyで安全なHTMLにサニタイズ
+            const cleanHtml = DOMPurify.sanitize(rawHtml, {
+                ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'del', 's', 'code', 'pre', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr'],
+                ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'rel'],
+                ALLOW_DATA_ATTR: false
+            });
+            
+            return cleanHtml;
+        } catch (error) {
+            console.error('Markdownレンダリングエラー:', error);
+            // エラーの場合は元のテキストをエスケープして表示
+            return this.escapeHtml(markdown);
+        }
     }
     
     showError(message) {
