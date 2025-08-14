@@ -162,8 +162,8 @@ CLAUDE.md
 # Ruff cache
 .ruff_cache/
 
-# Architecture and design documents (optional - uncomment if needed)
-# ARCHITECTURE.md
-# DATABASE_ERD.md
-# DESIGN_SPEC.md
-# MCP_TOOLS_IMPLEMENTATION.md
+# Architecture and design documents (development-specific)
+ARCHITECTURE.md
+DATABASE_ERD.md
+DESIGN_SPEC.md
+MCP_TOOLS_IMPLEMENTATION.md
