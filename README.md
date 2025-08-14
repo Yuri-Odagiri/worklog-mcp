@@ -198,11 +198,14 @@ Claude Codeを使用してMCPサーバーを追加：
 
 ```bash
 # プロジェクト分離ありで追加
-claude mcp add worklog-project -s project -- uv run python -m worklog_mcp --project /path/to/project
+claude mcp add worklog-project -s project -- uv run python -m worklog_mcp --project プロジェクト名
 
 # 現在のディレクトリをプロジェクトとして追加
 cd /path/to/your-project
 claude mcp add worklog-current -s project -- uv run python -m worklog_mcp
+
+# Gitリポジトリから直接追加
+claude mcp add worklog -s project -- uvx --from git+https://github.com/Yuri-Odagiri/worklog-mcp.git worklog-mcp
 ```
 
 ### 方法2: 手動設定（開発モード）

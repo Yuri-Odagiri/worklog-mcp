@@ -19,10 +19,6 @@ def register_tools(
 ) -> None:
     """全ツールをMCPサーバーに登録（Web通知機能付き）"""
 
-    @mcp.tool(
-        name="get_project_info",
-        description="現在のプロジェクト情報（プロジェクト名、パス、データベース情報など）を取得します。",
-    )
     async def get_project_info(ctx: Context) -> Dict[str, Any]:
         """現在のプロジェクト情報を取得"""
         try:
@@ -118,10 +114,6 @@ def register_tools(
             await ctx.error(f"予期しないエラー: {str(e)}")
             raise
 
-    @mcp.tool(
-        name="check_avatar_status",
-        description="ユーザーのアバター生成状況を確認します。AI生成アバターが完了したかどうかをチェックできます。",
-    )
     async def check_avatar_status(user_id: str, ctx: Context) -> str:
         """アバター生成状況を確認する
 
@@ -659,10 +651,6 @@ def register_tools(
             await ctx.error(f"予期しないエラー: {str(e)}")
             raise
 
-    @mcp.tool(
-        name="delete_worklog",
-        description="指定したIDの分報を削除します。投稿者本人または管理者のみ削除可能です。削除は元に戻せないので注意して使用してください。",
-    )
     async def delete_entry(user_id: str, entry_id: str, ctx: Context) -> str:
         """分報を削除する"""
         try:
@@ -708,10 +696,6 @@ def register_tools(
             await ctx.error(f"予期しないエラー: {str(e)}")
             raise
 
-    @mcp.tool(
-        name="truncate_worklogs",
-        description="分報データベースの全データを削除します。このオプションはデータを完全に消去するため、十分注意して使用してください。復旧はできません。",
-    )
     async def truncate_entries(
         user_id: str, ctx: Context, target_user_id: Optional[str] = None
     ) -> str:
