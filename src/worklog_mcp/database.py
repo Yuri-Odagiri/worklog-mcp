@@ -20,6 +20,7 @@ class Database:
         """データベースの初期化"""
         async with aiosqlite.connect(self.db_path) as db:
             await self._create_tables(db)
+            await self._migrate_database(db)
             await db.commit()
 
     async def _create_tables(self, db: aiosqlite.Connection) -> None:
@@ -33,6 +34,7 @@ class Database:
                 role TEXT DEFAULT 'メンバー',
                 personality TEXT DEFAULT '明るく協力的で、チームワークを重視する性格です。',
                 appearance TEXT DEFAULT '親しみやすい外見で、いつも笑顔を絶やしません。',
+                avatar_path TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_active DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -77,6 +79,16 @@ class Database:
             "CREATE INDEX IF NOT EXISTS idx_entries_related ON entries(related_entry_id)"
         )
 
+    async def _migrate_database(self, db: aiosqlite.Connection) -> None:
+        """データベースマイグレーション"""
+        # avatar_pathカラムが存在するかチェック
+        cursor = await db.execute("PRAGMA table_info(users)")
+        columns = await cursor.fetchall()
+        column_names = [col[1] for col in columns]
+
+        if "avatar_path" not in column_names:
+            await db.execute("ALTER TABLE users ADD COLUMN avatar_path TEXT")
+
     async def is_first_run(self) -> bool:
         """初回起動かどうか確認"""
         async with aiosqlite.connect(self.db_path) as db:
@@ -89,7 +101,7 @@ class Database:
         """ユーザー作成"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
-                "INSERT INTO users (user_id, name, theme_color, role, personality, appearance, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO users (user_id, name, theme_color, role, personality, appearance, avatar_path, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     user.user_id,
                     user.name,
@@ -97,6 +109,7 @@ class Database:
                     user.role,
                     user.personality,
                     user.appearance,
+                    user.avatar_path,
                     user.created_at,
                     user.last_active,
                 ),
@@ -107,7 +120,7 @@ class Database:
         """ユーザー取得"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "SELECT user_id, name, theme_color, role, personality, appearance, created_at, last_active FROM users WHERE user_id = ?",
+                "SELECT user_id, name, theme_color, role, personality, appearance, avatar_path, created_at, last_active FROM users WHERE user_id = ?",
                 (user_id,),
             )
             row = await cursor.fetchone()
@@ -119,12 +132,13 @@ class Database:
                     role=row[3],
                     personality=row[4],
                     appearance=row[5],
-                    created_at=datetime.fromisoformat(row[6])
-                    if isinstance(row[6], str)
-                    else row[6],
-                    last_active=datetime.fromisoformat(row[7])
+                    avatar_path=row[6],
+                    created_at=datetime.fromisoformat(row[7])
                     if isinstance(row[7], str)
                     else row[7],
+                    last_active=datetime.fromisoformat(row[8])
+                    if isinstance(row[8], str)
+                    else row[8],
                 )
             return None
 
@@ -132,7 +146,7 @@ class Database:
         """全ユーザー取得"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "SELECT user_id, name, theme_color, role, personality, appearance, created_at, last_active FROM users ORDER BY last_active DESC"
+                "SELECT user_id, name, theme_color, role, personality, appearance, avatar_path, created_at, last_active FROM users ORDER BY last_active DESC"
             )
             rows = await cursor.fetchall()
             return [
@@ -143,12 +157,13 @@ class Database:
                     role=row[3],
                     personality=row[4],
                     appearance=row[5],
-                    created_at=datetime.fromisoformat(row[6])
-                    if isinstance(row[6], str)
-                    else row[6],
-                    last_active=datetime.fromisoformat(row[7])
+                    avatar_path=row[6],
+                    created_at=datetime.fromisoformat(row[7])
                     if isinstance(row[7], str)
                     else row[7],
+                    last_active=datetime.fromisoformat(row[8])
+                    if isinstance(row[8], str)
+                    else row[8],
                 )
                 for row in rows
             ]

@@ -14,6 +14,7 @@ Model Context Protocol (MCP) を使用した分報管理サーバー + Webビュ
 - 🌐 **統合Webビューアー**: ブラウザでのリアルタイム分報閲覧
 - 🏗️ **プロジェクト分離**: プロジェクト単位での完全なデータ分離
 - 👥 **マルチユーザー対応**: チームメンバーの分報を統合管理
+- 🎨 **AI生成アバター**: OpenAI GPT-5による個性的なアバター自動生成
 - 🔍 **高機能検索**: キーワード、日付、ユーザー別の柔軟な検索
 - 🧵 **スレッド機能**: 分報に対する返信・続報の記録
 - 📊 **統計・サマリー**: 作業状況の自動分析とレポート生成
@@ -68,6 +69,77 @@ uvx git+https://github.com/your-username/worklog-mcp.git
 **uvx vs uv の違い:**
 - `uv run`: プロジェクト環境でスクリプト実行（開発・個人利用）
 - `uvx`: パッケージを一時環境で実行（配布・共有用）
+
+## 環境変数設定
+
+### AI生成アバター機能
+
+ユーザー登録時にOpenAI GPT-5を使用してパーソナライズされたアバター画像を生成できます。
+
+#### OpenAI API設定
+
+```bash
+# OpenAI APIキーを設定（AI生成アバター用）
+export OPENAI_API_KEY="your-openai-api-key-here"
+
+# 設定確認
+echo $OPENAI_API_KEY
+```
+
+**Windows（PowerShell）:**
+```powershell
+# 環境変数設定
+$env:OPENAI_API_KEY = "your-openai-api-key-here"
+
+# 設定確認
+echo $env:OPENAI_API_KEY
+```
+
+**Windows（コマンドプロンプト）:**
+```cmd
+rem 環境変数設定
+set OPENAI_API_KEY=your-openai-api-key-here
+
+rem 設定確認
+echo %OPENAI_API_KEY%
+```
+
+#### アバター生成の動作
+
+- **OpenAI API利用可能**: ユーザーの性格・外見に基づいてGPT-5がオリジナルアバターを生成
+- **API未設定時**: テーマカラーのグラデーション円画像を自動生成（フォールバック）
+
+### データベース保存場所
+
+```bash
+# カスタムデータベースパス（オプション）
+export WORKLOG_DB_PATH="/custom/path"
+
+# デフォルト: ~/.worklog
+```
+
+### Claude Desktop設定での環境変数
+
+```json
+{
+  "mcpServers": {
+    "worklog-project": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project", "--no-web"],
+      "cwd": "/absolute/path/to/worklog-mcp",
+      "env": {
+        "WORKLOG_DB_PATH": "~/.worklog",
+        "OPENAI_API_KEY": "your-openai-api-key-here"
+      }
+    }
+  }
+}
+```
+
+**注意事項:**
+- OpenAI APIキーは有料サービスです。使用量に応じて課金されます
+- APIキーが未設定でも基本機能は正常に動作します（グラデーションアバター使用）
+- セキュリティのため、APIキーを公開リポジトリにコミットしないよう注意してください
 
 ## Webビューアー機能
 
@@ -229,11 +301,17 @@ init_project_config project_name="my-project" description="プロジェクトの
 
 ### 2. 初回起動とユーザー登録
 
-初回起動時には必ずユーザー登録が必要です：
+初回起動時には必ずユーザー登録が必要です。登録時にAI生成またはテーマカラーのアバター画像が自動生成されます：
 
 ```
 register_user "my-user-id" "山田太郎" Blue "チームリーダー" "責任感が強く、チームを引っ張る性格です。" "凛とした佇まいで、頼りになる雰囲気を持っています。"
 ```
+
+**アバター生成について:**
+- 性格・外見情報を詳細に入力すると、より個性的なAIアバターが生成されます
+- OpenAI APIが設定されている場合：GPT-5がユーザー情報を基にオリジナルアバターを生成
+- APIが未設定の場合：テーマカラーのグラデーション円アバターを生成
+- 生成されたアバターは `~/.worklog/{project_name}/avatar/{user_id}.png` に保存
 
 ### 3. 基本的な分報投稿
 
@@ -410,6 +488,8 @@ curl -N http://localhost:8080/events
 - **データベース**: SQLite (aiosqlite)
 - **非同期処理**: asyncio
 - **パッケージマネージャー**: uv
+- **AI画像生成**: OpenAI GPT-5 Image Generation Tools
+- **画像処理**: Pillow (PIL)
 
 ### Webサーバー
 - **フレームワーク**: FastAPI
@@ -435,7 +515,7 @@ curl -N http://localhost:8080/events
 
 | ツール名 | 説明 | 必須パラメータ |
 |---------|------|---------------|
-| `register_user` | ユーザー登録（初回必須） | `user_id`, `name`, `theme_color`(Red/Blue/Green/Yellow/Purple/Orange/Pink/Cyan), `role`, `personality`, `appearance` |
+| `register_user` | ユーザー登録（初回必須・AI生成アバター付き） | `user_id`, `name`, `theme_color`(Red/Blue/Green/Yellow/Purple/Orange/Pink/Cyan), `role`, `personality`, `appearance` |
 | `post_worklog` | 分報投稿 | `user_id`, `markdown_content` |
 
 ### 管理ツール

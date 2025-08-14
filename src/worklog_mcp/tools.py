@@ -59,8 +59,8 @@ def register_tools(
             name: あなたのユーザー名(表示名)
             theme_color: あなたのテーマカラー（Red/Blue/Green/Yellow/Purple/Orange/Pink/Cyanのみ）
             role: あなたの役割
-            personality: あなたの性格（想像で設定可能）
-            appearance: あなたの見た目（想像で設定可能）
+            personality: あなたの性格（想像で設定可能）。300文字程度。
+            appearance: あなたの詳細な見た目（想像で設定可能）。性別、年齢、髪の色、肌の色等詳細に500文字程度。
         """
         try:
             # バリデーション
@@ -80,6 +80,20 @@ def register_tools(
 
             await ctx.info(f"ユーザー '{user_id}' を登録中...")
 
+            # アバター画像を生成
+            from .avatar_generator import generate_user_avatar
+
+            await ctx.info("アバター画像を生成中...")
+            avatar_path = await generate_user_avatar(
+                name,
+                role,
+                personality,
+                appearance,
+                theme_color,
+                user_id,
+                project_context,
+            )
+
             # ユーザー作成
             user = User(
                 user_id=user_id,
@@ -88,11 +102,12 @@ def register_tools(
                 role=role,
                 personality=personality,
                 appearance=appearance,
+                avatar_path=avatar_path,
             )
             await db.create_user(user)
 
             await ctx.info(f"ユーザー '{name}' ({user_id}) の登録が完了しました")
-            return f"ユーザー '{name}' ({user_id}) を登録しました\nテーマカラー: {theme_color}\n役割: {role}\n性格: {personality}\n外観: {appearance}"
+            return f"ユーザー '{name}' ({user_id}) を登録しました\nテーマカラー: {theme_color}\n役割: {role}\n性格: {personality}\n外観: {appearance}\nアバター: {avatar_path}"
 
         except ValueError as e:
             await ctx.error(f"ユーザー登録エラー: {str(e)}")

@@ -25,6 +25,7 @@ class User:
     appearance: str = (
         "親しみやすい外見で、いつも笑顔を絶やしません。"  # デフォルトの外観
     )
+    avatar_path: Optional[str] = None  # アバター画像のパス
     created_at: datetime = field(default_factory=datetime.now)
     last_active: datetime = field(default_factory=datetime.now)
 
