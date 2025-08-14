@@ -58,21 +58,11 @@ def run_server(project_path: Optional[str] = None) -> None:
             # サーバー作成
             mcp = await create_server(project_path)
 
-            # サーバー実行
-            await mcp.run()
+            # サーバー実行（統合サーバーと同じ方法を使用）
+            await mcp.run_stdio_async()
 
-        # asyncio実行（既存のループがある場合はそれを使用）
-        try:
-            asyncio.get_running_loop()
-            # 既にイベントループが実行中の場合はタスクとして実行
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, _run())
-                future.result()
-        except RuntimeError:
-            # イベントループが実行されていない場合は通常の方法で実行
-            asyncio.run(_run())
+        # asyncio実行
+        asyncio.run(_run())
 
     except Exception as e:
         logger.error(f"サーバー実行エラー: {e}")

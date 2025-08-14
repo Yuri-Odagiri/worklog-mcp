@@ -62,7 +62,7 @@ async def generate_openai_avatar(
                     "type": "image_generation",
                     "background": "transparent",
                     "quality": "high",
-                    "size": "1024x1024"
+                    "size": "1024x1024",
                 }
             ],
         )
@@ -152,6 +152,64 @@ async def generate_gradient_avatar(
     return str(avatar_path)
 
 
+async def generate_user_avatar_async(
+    name: str,
+    role: str,
+    personality: str,
+    appearance: str,
+    theme_color: str,
+    user_id: str,
+    project_context,
+) -> None:
+    """ユーザーのアバター画像を非同期で生成する（バックグラウンド実行用）
+
+    OpenAI APIが利用可能な場合はAI生成、そうでなければグラデーション画像を生成
+    生成完了後、データベースのアバターパスを更新
+
+    Args:
+        name: ユーザー名
+        role: 役割
+        personality: 性格
+        appearance: 外見
+        theme_color: テーマカラー
+        user_id: ユーザーID
+        project_context: プロジェクトコンテキスト
+    """
+    try:
+        # まずOpenAI APIでの生成を試行
+        openai_path = await generate_openai_avatar(
+            name, role, personality, appearance, user_id, project_context
+        )
+
+        if openai_path:
+            avatar_path = openai_path
+        else:
+            # フォールバック: グラデーション画像を生成
+            avatar_path = await generate_gradient_avatar(
+                theme_color, user_id, project_context
+            )
+
+        # データベースのアバターパスを更新
+        from .database import Database
+
+        db = Database(project_context.get_db_path())
+        await db.update_user_avatar_path(user_id, avatar_path)
+
+    except Exception:
+        # エラーが発生した場合もフォールバックを試行
+        try:
+            avatar_path = await generate_gradient_avatar(
+                theme_color, user_id, project_context
+            )
+            from .database import Database
+
+            db = Database(project_context.get_db_path())
+            await db.update_user_avatar_path(user_id, avatar_path)
+        except Exception:
+            # 完全に失敗した場合は何もしない
+            pass
+
+
 async def generate_user_avatar(
     name: str,
     role: str,
@@ -161,9 +219,9 @@ async def generate_user_avatar(
     user_id: str,
     project_context,
 ) -> str:
-    """ユーザーのアバター画像を生成する
+    """ユーザーのアバター画像を生成する（即座にフォールバック画像を返す）
 
-    OpenAI APIが利用可能な場合はAI生成、そうでなければグラデーション画像を生成
+    即座にグラデーション画像を生成して返し、バックグラウンドでOpenAI生成を試行
 
     Args:
         name: ユーザー名
@@ -172,17 +230,21 @@ async def generate_user_avatar(
         appearance: 外見
         theme_color: テーマカラー
         user_id: ユーザーID
+        project_context: プロジェクトコンテキスト
 
     Returns:
-        生成された画像ファイルのパス
+        生成された画像ファイルのパス（即座にグラデーション画像）
     """
-    # まずOpenAI APIでの生成を試行
-    openai_path = await generate_openai_avatar(
-        name, role, personality, appearance, user_id, project_context
+    # 即座にグラデーション画像を生成して返す
+    avatar_path = await generate_gradient_avatar(theme_color, user_id, project_context)
+
+    # バックグラウンドでOpenAI生成を開始（結果は待たない）
+    import asyncio
+
+    asyncio.create_task(
+        generate_user_avatar_async(
+            name, role, personality, appearance, theme_color, user_id, project_context
+        )
     )
 
-    if openai_path:
-        return openai_path
-
-    # フォールバック: グラデーション画像を生成
-    return await generate_gradient_avatar(theme_color, user_id, project_context)
+    return avatar_path

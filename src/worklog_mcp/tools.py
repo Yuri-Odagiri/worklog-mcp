@@ -80,10 +80,12 @@ def register_tools(
 
             await ctx.info(f"ユーザー '{user_id}' を登録中...")
 
-            # アバター画像を生成
+            # アバター画像を即座に生成（グラデーション版）
             from .avatar_generator import generate_user_avatar
 
-            await ctx.info("アバター画像を生成中...")
+            await ctx.info(
+                "アバター画像を生成中（即座にグラデーション版を作成、AI版は背景で処理中）..."
+            )
             avatar_path = await generate_user_avatar(
                 name,
                 role,
@@ -107,13 +109,54 @@ def register_tools(
             await db.create_user(user)
 
             await ctx.info(f"ユーザー '{name}' ({user_id}) の登録が完了しました")
-            return f"ユーザー '{name}' ({user_id}) を登録しました\nテーマカラー: {theme_color}\n役割: {role}\n性格: {personality}\n外観: {appearance}\nアバター: {avatar_path}"
+            return f"ユーザー '{name}' ({user_id}) を登録しました\nテーマカラー: {theme_color}\n役割: {role}\n性格: {personality}\n外観: {appearance}\nアバター: {avatar_path}\n\nNote: AI生成アバターは背景で処理中です。数分後に 'check_avatar_status {user_id}' で確認できます。"
 
         except ValueError as e:
             await ctx.error(f"ユーザー登録エラー: {str(e)}")
             raise
         except Exception as e:
             await ctx.error(f"予期しないエラー: {str(e)}")
+            raise
+
+    @mcp.tool(
+        name="check_avatar_status",
+        description="ユーザーのアバター生成状況を確認します。AI生成アバターが完了したかどうかをチェックできます。",
+    )
+    async def check_avatar_status(user_id: str, ctx: Context) -> str:
+        """アバター生成状況を確認する
+
+        Args:
+            user_id: 確認したいユーザーID
+        """
+        try:
+            # ユーザーが存在するかチェック
+            user = await db.get_user(user_id)
+            if not user:
+                raise ValueError(f"ユーザーID '{user_id}' が見つかりません")
+
+            # アバターファイルの存在確認
+            from pathlib import Path
+
+            avatar_path = user.avatar_path
+            if not avatar_path or not Path(avatar_path).exists():
+                return f"ユーザー '{user_id}' のアバターファイルが見つかりません"
+
+            # ファイルサイズと作成時間で判定（AI生成は通常より大きく、時間もかかる）
+
+            avatar_file = Path(avatar_path)
+            file_size = avatar_file.stat().st_size
+
+            # 10KB以下の場合はおそらくグラデーション画像
+            if file_size < 10 * 1024:
+                return f"ユーザー '{user_id}' のアバター: グラデーション画像（{file_size // 1024}KB）\nAI生成版は背景で処理中です..."
+            else:
+                return f"ユーザー '{user_id}' のアバター: AI生成版に更新済み（{file_size // 1024}KB）\nパス: {avatar_path}"
+
+        except ValueError as e:
+            await ctx.error(str(e))
+            raise
+        except Exception as e:
+            await ctx.error(f"アバター状況確認エラー: {str(e)}")
             raise
 
     @mcp.tool(

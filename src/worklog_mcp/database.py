@@ -20,7 +20,6 @@ class Database:
         """データベースの初期化"""
         async with aiosqlite.connect(self.db_path) as db:
             await self._create_tables(db)
-            await self._migrate_database(db)
             await db.commit()
 
     async def _create_tables(self, db: aiosqlite.Connection) -> None:
@@ -78,16 +77,6 @@ class Database:
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_entries_related ON entries(related_entry_id)"
         )
-
-    async def _migrate_database(self, db: aiosqlite.Connection) -> None:
-        """データベースマイグレーション"""
-        # avatar_pathカラムが存在するかチェック
-        cursor = await db.execute("PRAGMA table_info(users)")
-        columns = await cursor.fetchall()
-        column_names = [col[1] for col in columns]
-
-        if "avatar_path" not in column_names:
-            await db.execute("ALTER TABLE users ADD COLUMN avatar_path TEXT")
 
     async def is_first_run(self) -> bool:
         """初回起動かどうか確認"""
@@ -176,6 +165,16 @@ class Database:
                 (datetime.now(), user_id),
             )
             await db.commit()
+
+    async def update_user_avatar_path(self, user_id: str, avatar_path: str) -> bool:
+        """ユーザーのアバターパスを更新する"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE users SET avatar_path = ? WHERE user_id = ?",
+                (avatar_path, user_id),
+            )
+            await db.commit()
+            return db.total_changes > 0
 
     # エントリー管理
     async def create_entry(self, entry: WorklogEntry) -> None:

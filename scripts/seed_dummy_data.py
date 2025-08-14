@@ -157,12 +157,29 @@ async def seed_dummy_data(project_name: str, days: int = 7, entries_per_day: int
     print(f"ダミーデータを投入中: {db_path}")
     print(f"設定: {days}日分、1日あたり{entries_per_day}エントリー/ユーザー")
     
+    # プロジェクトコンテキストをダミー作成（アバター生成用）
+    from worklog_mcp.project_context import ProjectContext
+    project_context = ProjectContext(str(Path.home() / ".worklog" / project_name))
+    
     # ユーザーを作成
     print("\nユーザーを作成中...")
     for user_data in DUMMY_USERS:
-        user = User(**user_data)
+        # アバター画像を生成（簡易版のみ）
+        from worklog_mcp.avatar_generator import generate_gradient_avatar
+        
+        avatar_path = await generate_gradient_avatar(
+            user_data["theme_color"], 
+            user_data["user_id"], 
+            project_context
+        )
+        
+        # アバターパスを追加
+        user_data_with_avatar = user_data.copy()
+        user_data_with_avatar["avatar_path"] = avatar_path
+        
+        user = User(**user_data_with_avatar)
         await db.create_user(user)
-        print(f"  ✓ {user.name} ({user.user_id})")
+        print(f"  ✓ {user.name} ({user.user_id}) - アバター: {Path(avatar_path).name}")
     
     # 分報エントリーを作成
     print("\n分報エントリーを作成中...")
