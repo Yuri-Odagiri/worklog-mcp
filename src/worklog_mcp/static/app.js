@@ -93,7 +93,14 @@ class SimpleWorklogViewer {
             case 'entries_truncated':
                 this.entries = [];
                 this.render();
-                this.showNotification(`${event.data.deleted_count} 件の分報が削除されました`);
+                let message = `${event.data.deleted_count} 件の分報が削除されました`;
+                if (event.data.users_deleted > 0) {
+                    message += `（${event.data.users_deleted} 件のユーザー情報も削除）`;
+                }
+                if (event.data.avatars_deleted > 0) {
+                    message += `（${event.data.avatars_deleted} 件のアバター画像も削除）`;
+                }
+                this.showNotification(message);
                 break;
             case 'ping':
                 // Keep-alive応答（何もしない）
@@ -416,33 +423,37 @@ class SimpleWorklogViewer {
     }
     
     async confirmTruncateAll() {
+        // 削除オプション選択のモーダル表示
+        const deleteOption = await this.showDeleteOptionsModal();
+        if (!deleteOption) return; // キャンセルされた場合
+        
+        // 最終確認
         const confirmed = confirm(
-            '全ての分報を削除しますか？\n' +
-            'この操作は元に戻せません。\n' +
-            '本当に削除する場合は「OK」を押してください。'
+            deleteOption === 'worklogs_only' 
+                ? '全ての分報を削除しますか？\n（ユーザー情報は保持されます）\n\nこの操作は元に戻せません。'
+                : '全ての分報とユーザー情報を削除しますか？\n\nこの操作は元に戻せません。'
         );
         
         if (confirmed) {
-            const doubleConfirmed = confirm(
-                '本当によろしいですか？\n' +
-                '全データが完全に削除されます。'
-            );
-            
-            if (doubleConfirmed) {
-                try {
-                    await this.truncateAllEntries();
-                } catch (error) {
-                    console.error('全削除エラー:', error);
-                    alert('全削除に失敗しました: ' + error.message);
-                }
+            try {
+                await this.truncateAllEntries(deleteOption);
+            } catch (error) {
+                console.error('全削除エラー:', error);
+                alert('全削除に失敗しました: ' + error.message);
             }
         }
     }
     
-    async truncateAllEntries() {
+    async truncateAllEntries(deleteOption = 'worklogs_only') {
         try {
             const response = await fetch('/api/entries', {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    delete_option: deleteOption
+                })
             });
             
             if (!response.ok) {
@@ -461,6 +472,58 @@ class SimpleWorklogViewer {
         } catch (error) {
             throw error;
         }
+    }
+
+    showDeleteOptionsModal() {
+        return new Promise((resolve) => {
+            // モーダルHTML作成
+            const modal = document.createElement('div');
+            modal.className = 'delete-modal-overlay';
+            modal.innerHTML = `
+                <div class="delete-modal">
+                    <h3>削除オプションを選択してください</h3>
+                    <div class="delete-options">
+                        <label class="delete-option">
+                            <input type="radio" name="deleteOption" value="worklogs_only" checked>
+                            <span>分報のみ削除</span>
+                            <small>分報データのみを削除し、ユーザー情報は保持します</small>
+                        </label>
+                        <label class="delete-option">
+                            <input type="radio" name="deleteOption" value="full_reset">
+                            <span>完全リセット</span>
+                            <small>分報データとユーザー情報を全て削除します</small>
+                        </label>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="button" class="cancel-btn">キャンセル</button>
+                        <button type="button" class="confirm-btn">決定</button>
+                    </div>
+                </div>
+            `;
+            
+            // モーダルをDOMに追加
+            document.body.appendChild(modal);
+            
+            // イベントリスナー設定
+            modal.querySelector('.cancel-btn').onclick = () => {
+                document.body.removeChild(modal);
+                resolve(null);
+            };
+            
+            modal.querySelector('.confirm-btn').onclick = () => {
+                const selectedOption = modal.querySelector('input[name="deleteOption"]:checked').value;
+                document.body.removeChild(modal);
+                resolve(selectedOption);
+            };
+            
+            // モーダル外クリックでキャンセル
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                    resolve(null);
+                }
+            };
+        });
     }
 }
 

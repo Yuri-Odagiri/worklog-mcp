@@ -37,7 +37,7 @@ def register_tools(
 
     @mcp.tool(
         name="register_user",
-        description="新規ユーザーを分報システムに登録します。初回起動時にのみ必要で、ユーザーID、表示名、テーマカラー、役割、性格、外見を設定できます。",
+        description="新規ユーザーを分報システムに登録します。初回起動時にのみ必要で、ユーザーID、表示名、テーマカラー、役割(日本語)、性格(200字程度)、外見(性別、年齢、髪の色、肌の色等詳細に500文字程度)を設定できます。",
     )
     async def register_user(
         user_id: str,

@@ -67,23 +67,32 @@ async def generate_openai_avatar(
         client = OpenAI(api_key=api_key)
 
         start_time = time.time()
-        response = client.images.generate(
-            model="dall-e-3",
-            prompt=prompt,
-            size="1024x1024",
-            quality="hd",
-            response_format="b64_json",
-            n=1,
+        response = client.responses.create(
+            model="gpt-5",
+            input=prompt,
+            tools=[
+                {
+                    "type": "image_generation",
+                    "background": "transparent",
+                    "quality": "high",
+                }
+            ],
         )
         end_time = time.time()
 
         logger.info(f"OpenAI API呼び出し完了 - 時間: {end_time - start_time:.2f}秒")
 
-        if not response.data or len(response.data) == 0:
+        image_data = [
+            output.result
+            for output in response.output
+            if output.type == "image_generation_call"
+        ]
+
+        if not image_data:
             logger.warning("OpenAI APIから画像データが返されませんでした")
             return None
 
-        image_base64 = response.data[0].b64_json
+        image_base64 = image_data[0]
         logger.debug(f"受信した画像データサイズ: {len(image_base64)} bytes (base64)")
 
         # プロジェクト専用のアバターディレクトリパスを取得
