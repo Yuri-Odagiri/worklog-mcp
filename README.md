@@ -38,9 +38,6 @@ uv sync
 # 統合サーバー起動（MCP + Webビューアー）
 uv run python -m worklog_mcp
 
-# MCPサーバーのみ起動
-uv run python -m worklog_mcp --no-web
-
 # カスタムポートでWebサーバー起動
 uv run python -m worklog_mcp --web-port 3000
 ```
@@ -52,9 +49,6 @@ uv run python -m worklog_mcp --web-port 3000
 ```bash
 # PyPI公開後の実行（統合サーバー）
 uvx worklog-mcp
-
-# MCPサーバーのみ起動
-uvx worklog-mcp --no-web
 
 # カスタムポートでWebサーバー起動
 uvx worklog-mcp --web-port 3000
@@ -112,11 +106,13 @@ echo %OPENAI_API_KEY%
 ### データベース保存場所
 
 ```bash
-# カスタムデータベースパス（オプション）
-export WORKLOG_DB_PATH="/custom/path"
+# カスタムベースパス（オプション）
+export WORKLOG_BASE_PATH="/custom/path"
 
 # デフォルト: ~/.worklog
 ```
+
+データは `WORKLOG_BASE_PATH` 以下にプロジェクト名で分離して保存されます。
 
 ### Claude Desktop設定での環境変数
 
@@ -128,7 +124,7 @@ export WORKLOG_DB_PATH="/custom/path"
       "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project", "--no-web"],
       "cwd": "/absolute/path/to/worklog-mcp",
       "env": {
-        "WORKLOG_DB_PATH": "~/.worklog",
+        "WORKLOG_BASE_PATH": "~/.worklog",
         "OPENAI_API_KEY": "your-openai-api-key-here"
       }
     }
@@ -166,9 +162,6 @@ export WORKLOG_DB_PATH="/custom/path"
 # 統合モード（推奨）: MCP + Webビューアー
 uv run python -m worklog_mcp
 
-# MCPのみモード: Claude Desktop用
-uv run python -m worklog_mcp --no-web
-
 # 開発モード: カスタムポート
 uv run python -m worklog_mcp --web-port 3000
 ```
@@ -183,19 +176,19 @@ uv run python -m worklog_mcp --web-port 3000
 # プロジェクトAの分報
 uvx worklog-mcp --project /path/to/project-a
 
-# プロジェクトBの分報（完全に分離される）
+# プロジェクトBの分報（完全に分離される）  
 uvx worklog-mcp --project /path/to/project-b
 
-# 現在のディレクトリをプロジェクトとして使用
+# 現在のディレクトリをプロジェクトとして使用（--project未指定時）
 cd /path/to/my-project
 uvx worklog-mcp
-# 上記は uvx worklog-mcp --project $(pwd) と同等
 ```
 
 ### データ分離の仕組み
 
-- **データベース**: `~/.worklog/{project_name}/database.db`
-- **プロジェクト名**: プロジェクトパスから自動生成（ディレクトリ名+ハッシュ）
+- **データベース**: `{WORKLOG_BASE_PATH}/{project_name}/database/worklog.db`
+- **アバター画像**: `{WORKLOG_BASE_PATH}/{project_name}/avatar/{user_id}.png` 
+- **プロジェクト名**: `--project`で指定したパス（未指定時は現在のディレクトリ）から自動生成
 
 ## Claude Desktop での設定
 
@@ -209,18 +202,12 @@ uvx worklog-mcp
     "worklog-project-a": {
       "command": "uv",
       "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project-a", "--no-web"],
-      "cwd": "/absolute/path/to/worklog-mcp",
-      "env": {
-        "WORKLOG_DB_PATH": "~/.worklog"
-      }
+      "cwd": "/absolute/path/to/worklog-mcp"
     },
     "worklog-project-b": {
       "command": "uv", 
       "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project-b", "--no-web"],
-      "cwd": "/absolute/path/to/worklog-mcp",
-      "env": {
-        "WORKLOG_DB_PATH": "~/.worklog"
-      }
+      "cwd": "/absolute/path/to/worklog-mcp"
     }
   }
 }
@@ -254,10 +241,7 @@ open http://localhost:8080
   "mcpServers": {
     "worklog-project-a": {
       "command": "uvx",
-      "args": ["/absolute/path/to/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl", "--project", "/path/to/project-a", "--no-web"],
-      "env": {
-        "WORKLOG_DB_PATH": "~/.worklog"
-      }
+      "args": ["/absolute/path/to/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl", "--project", "/path/to/project-a"]
     }
   }
 }
@@ -276,16 +260,12 @@ open http://localhost:8080
   "mcpServers": {
     "worklog": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/Yuri-Odagiri/worklog-mcp.git", "worklog-mcp", "--no-web"],
-      "env": {
-        "WORKLOG_DB_PATH": "~/.worklog"
-      }
+      "args": ["--from", "git+https://github.com/Yuri-Odagiri/worklog-mcp.git", "worklog-mcp"]
     }
   }
 }
 ```
 
-**注意**: `--from`オプションを使用することで、PyPI公開前でもGitリポジトリから直接実行できます。
 
 ### 方法4: PyPI公開後
 
@@ -296,10 +276,7 @@ PyPI公開後の実行：
   "mcpServers": {
     "worklog": {
       "command": "uvx",
-      "args": ["worklog-mcp", "--no-web"],
-      "env": {
-        "WORKLOG_DB_PATH": "~/.worklog"
-      }
+      "args": ["worklog-mcp"]
     }
   }
 }
@@ -371,7 +348,7 @@ JWTトークンの有効期限設定がうまくいかない"
 
 ### ディレクトリ構造
 ```
-~/.worklog/
+{WORKLOG_BASE_PATH}/             # デフォルト: ~/.worklog
 ├── {project_name}/
 │   ├── database/
 │   │   └── worklog.db          # SQLiteデータベース
@@ -381,16 +358,18 @@ JWTトークンの有効期限設定がうまくいかない"
 └── ...
 ```
 
-### デフォルトパス
-- **データベース**: `~/.worklog/{project_name}/database/worklog.db`
-- **アバター画像**: `~/.worklog/{project_name}/avatar/{user_id}.png`
+### 保存パス
+- **データベース**: `{WORKLOG_BASE_PATH}/{project_name}/database/worklog.db`
+- **アバター画像**: `{WORKLOG_BASE_PATH}/{project_name}/avatar/{user_id}.png`
+- **デフォルトベースパス**: `~/.worklog`（WORKLOG_BASE_PATH未設定時）
 
 ### 環境変数での設定
-`WORKLOG_DB_PATH`環境変数でベースディレクトリを変更可能：
 ```bash
-export WORKLOG_DB_PATH="/custom/path"
+# カスタムベースパスを指定
+export WORKLOG_BASE_PATH="/custom/path"
 # → /custom/path/{project_name}/database/worklog.db
 ```
+
 
 ## データ形式
 

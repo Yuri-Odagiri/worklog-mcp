@@ -70,7 +70,7 @@ class ProjectContext:
 
     def get_database_path(self) -> str:
         """プロジェクト専用のデータベースパスを取得"""
-        base_path = os.environ.get("WORKLOG_DB_PATH", os.path.expanduser("~/.worklog"))
+        base_path = os.environ.get("WORKLOG_BASE_PATH", os.path.expanduser("~/.worklog"))
 
         # プロジェクト名でディレクトリを分離
         project_dir = Path(base_path) / self.get_project_name()
@@ -81,7 +81,7 @@ class ProjectContext:
 
     def get_avatar_path(self) -> str:
         """プロジェクト専用のアバターディレクトリパスを取得"""
-        base_path = os.environ.get("WORKLOG_DB_PATH", os.path.expanduser("~/.worklog"))
+        base_path = os.environ.get("WORKLOG_BASE_PATH", os.path.expanduser("~/.worklog"))
 
         # プロジェクト名でディレクトリを分離
         project_dir = Path(base_path) / self.get_project_name()
