@@ -1,0 +1,516 @@
+# 分報MCPサーバー
+
+Model Context Protocol (MCP) を使用した分報管理サーバー + Webビューアー
+
+## 概要
+
+分報MCPサーバーは、リアルタイムの作業ログ（分報）の記録・管理・検索機能をAIアシスタントに提供するPythonパッケージです。`uvx`コマンドで簡単に起動でき、複数ユーザーの細かい作業記録を時系列で管理します。
+
+**NEW**: 統合Webビューアーで、ブラウザからリアルタイムの分報閲覧が可能になりました！
+
+## 特徴
+
+- 🚀 **簡単起動**: `uvx`コマンドで環境を汚さずに実行
+- 🌐 **統合Webビューアー**: ブラウザでのリアルタイム分報閲覧
+- 🏗️ **プロジェクト分離**: プロジェクト単位での完全なデータ分離
+- 👥 **マルチユーザー対応**: チームメンバーの分報を統合管理
+- 🔍 **高機能検索**: キーワード、日付、ユーザー別の柔軟な検索
+- 🧵 **スレッド機能**: 分報に対する返信・続報の記録
+- 📊 **統計・サマリー**: 作業状況の自動分析とレポート生成
+- 💾 **ローカル保存**: SQLiteによる安全なローカルデータ管理
+- ⚡ **リアルタイム更新**: Server-Sent EventsによるWebUI即座更新
+
+## インストールと起動
+
+### 方法1: 開発モード（最も簡単）
+
+パッケージ化不要で、すぐに使用開始できます：
+
+```bash
+# リポジトリのクローン
+git clone <repository-url>
+cd worklog-mcp
+
+# 依存関係のインストール
+uv sync
+
+# 統合サーバー起動（MCP + Webビューアー）
+uv run python -m worklog_mcp
+
+# MCPサーバーのみ起動
+uv run python -m worklog_mcp --no-web
+
+# カスタムポートでWebサーバー起動
+uv run python -m worklog_mcp --web-port 3000
+```
+
+### 方法2: uvxでの実行（配布用）
+
+`uvx`は単一パッケージの実行に特化したツールです：
+
+```bash
+# PyPI公開後の実行（統合サーバー）
+uvx worklog-mcp
+
+# MCPサーバーのみ起動
+uvx worklog-mcp --no-web
+
+# カスタムポートでWebサーバー起動
+uvx worklog-mcp --web-port 3000
+
+# ローカルパッケージの実行
+uvx /path/to/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl
+
+# Git リポジトリから直接実行
+uvx git+https://github.com/your-username/worklog-mcp.git
+```
+
+**uvx vs uv の違い:**
+- `uv run`: プロジェクト環境でスクリプト実行（開発・個人利用）
+- `uvx`: パッケージを一時環境で実行（配布・共有用）
+
+## Webビューアー機能
+
+### アクセス方法
+
+統合サーバー起動後、以下のURLでアクセス可能：
+
+- **Webビューアー**: `http://localhost:8080`
+- **REST API**: `http://localhost:8080/api/*`
+- **SSEストリーム**: `http://localhost:8080/events`
+
+### Webビューアーの機能
+
+- **リアルタイム更新**: MCP経由の投稿が即座にWebUIに反映
+- **検索機能**: キーワード検索とリアルタイムフィルタリング
+- **レスポンシブデザイン**: モバイル端末でも快適な表示
+- **キーボードショートカット**: 
+  - `Ctrl+R` / `Cmd+R`: 更新
+  - `Ctrl+F` / `Cmd+F`: 検索欄にフォーカス
+
+### 運用モード
+
+```bash
+# 統合モード（推奨）: MCP + Webビューアー
+uv run python -m worklog_mcp
+
+# MCPのみモード: Claude Desktop用
+uv run python -m worklog_mcp --no-web
+
+# 開発モード: カスタムポート
+uv run python -m worklog_mcp --web-port 3000
+```
+
+## プロジェクト分離機能
+
+### プロジェクト単位での分報管理
+
+各プロジェクトで独立した分報データを管理できます：
+
+```bash
+# プロジェクトAの分報
+uvx worklog-mcp --project /path/to/project-a
+
+# プロジェクトBの分報（完全に分離される）
+uvx worklog-mcp --project /path/to/project-b
+
+# 現在のディレクトリをプロジェクトとして使用
+cd /path/to/my-project
+uvx worklog-mcp
+# 上記は uvx worklog-mcp --project $(pwd) と同等
+```
+
+### データ分離の仕組み
+
+- **データベース**: `~/.worklog/{project_name}/database.db`
+- **プロジェクト名**: プロジェクトパスから自動生成（ディレクトリ名+ハッシュ）
+
+## Claude Desktop での設定
+
+### 方法1: 開発モード（プロジェクト分離あり）
+
+開発環境から直接実行する場合：
+
+```json
+{
+  "mcpServers": {
+    "worklog-project-a": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project-a", "--no-web"],
+      "cwd": "/absolute/path/to/worklog-mcp",
+      "env": {
+        "WORKLOG_DB_PATH": "~/.worklog"
+      }
+    },
+    "worklog-project-b": {
+      "command": "uv", 
+      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project-b", "--no-web"],
+      "cwd": "/absolute/path/to/worklog-mcp",
+      "env": {
+        "WORKLOG_DB_PATH": "~/.worklog"
+      }
+    }
+  }
+}
+```
+
+**注意**: 
+- Claude Desktop設定では`--no-web`オプションを使用（MCPサーバーのみ）
+- `cwd`は`worklog-mcp`プロジェクトディレクトリの絶対パス
+- `--project`引数でプロジェクトディレクトリを指定
+- 複数プロジェクトで完全にデータが分離される
+
+### 統合Webビューアーの起動
+
+Claude Desktop設定とは別に、Webビューアーを起動：
+
+```bash
+# 同じプロジェクトでWebビューアー起動
+cd /path/to/project-a
+uv run python -m worklog_mcp
+
+# ブラウザでアクセス
+open http://localhost:8080
+```
+
+### 方法2: ローカルパッケージでの実行
+
+ローカルでビルドしたパッケージを使用する場合：
+
+```json
+{
+  "mcpServers": {
+    "worklog-project-a": {
+      "command": "uvx",
+      "args": ["/absolute/path/to/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl", "--project", "/path/to/project-a", "--no-web"],
+      "env": {
+        "WORKLOG_DB_PATH": "~/.worklog"
+      }
+    }
+  }
+}
+```
+
+**注意**: パスは絶対パスで指定してください。例：
+- Windows: `C:/Users/username/dev/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl`
+- macOS/Linux: `/home/username/dev/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl`
+
+### 方法3: PyPI公開後
+
+PyPI公開後の実行：
+
+```json
+{
+  "mcpServers": {
+    "worklog": {
+      "command": "uvx",
+      "args": ["worklog-mcp", "--no-web"],
+      "env": {
+        "WORKLOG_DB_PATH": "~/.worklog/database.db"
+      }
+    }
+  }
+}
+```
+
+## 使用方法
+
+### 1. プロジェクト設定（推奨）
+
+プロジェクトディレクトリで設定ファイルを作成：
+
+```bash
+# プロジェクトディレクトリで実行
+cd /path/to/your-project
+
+# Claude Desktop経由で設定ファイル作成
+init_project_config project_name="my-project" description="プロジェクトの説明"
+```
+
+### 2. 初回起動とユーザー登録
+
+初回起動時には必ずユーザー登録が必要です：
+
+```
+register_user "my-user-id" "山田太郎" Blue "チームリーダー" "責任感が強く、チームを引っ張る性格です。" "凛とした佇まいで、頼りになる雰囲気を持っています。"
+```
+
+### 3. 基本的な分報投稿
+
+```
+post_worklog "my-user-id" "## 作業
+- API実装開始  
+- エンドポイント設計完了
+
+## 感想
+コーヒー美味しい。今日は調子良さそう
+
+## 困りごと  
+JWTトークンの有効期限設定がうまくいかない"
+```
+
+### 4. 主要な機能
+
+#### 分報の投稿・管理
+- `post_worklog`: 新しい分報を投稿
+- `reply_worklog`: 既存分報への返信
+
+#### タイムライン・検索
+- `read_timeline`: 時系列での分報表示
+- `search_worklogs`: キーワード検索
+- `read_worklog_thread`: スレッド表示
+- `read_user_worklogs`: 特定ユーザーの分報取得
+
+#### チーム管理
+- `list_users`: 登録ユーザー一覧
+- `get_team_status`: チーム全体の状況
+
+#### 分析・統計
+- `generate_worklog_summary`: 期間別サマリー生成
+- `get_user_stats`: ユーザー別統計情報
+
+## データ保存場所
+
+### ディレクトリ構造
+```
+~/.worklog/
+├── {project_name}/
+│   ├── database/
+│   │   └── worklog.db          # SQLiteデータベース
+│   └── avatar/
+│       ├── {user_id}.png       # ユーザーアバター画像
+│       └── ...
+└── ...
+```
+
+### デフォルトパス
+- **データベース**: `~/.worklog/{project_name}/database/worklog.db`
+- **アバター画像**: `~/.worklog/{project_name}/avatar/{user_id}.png`
+
+### 環境変数での設定
+`WORKLOG_DB_PATH`環境変数でベースディレクトリを変更可能：
+```bash
+export WORKLOG_DB_PATH="/custom/path"
+# → /custom/path/{project_name}/database/worklog.db
+```
+
+## データ形式
+
+### 分報エントリー
+
+```json
+{
+  "id": "unique-entry-id",
+  "user_id": "user-id",
+  "user_name": "表示名",
+  "markdown_content": "## 作業\n- タスク1\n- タスク2",
+  "related_entry_id": null,
+  "created_at": "2024-01-01T10:00:00",
+  "updated_at": "2024-01-01T10:00:00"
+}
+```
+
+### タイムライン取得例
+
+```bash
+# 過去24時間の全ユーザーの分報
+read_timeline "my-user-id"
+
+# 過去8時間の分報
+read_timeline "my-user-id" hours=8
+
+# 最新20件の分報
+read_timeline "my-user-id" count=20
+
+# 特定ユーザーの分報
+read_timeline "my-user-id" target_user_id="other-user-id"
+```
+
+## 開発・テスト
+
+### データベーススクリプト
+
+プロジェクト用のデータベース初期化・ダミーデータ投入スクリプトが利用可能です：
+
+```bash
+# データベース初期化
+uv run python scripts/init_db.py --project worklog-mcp
+
+# 既存DBを強制削除して再作成
+uv run python scripts/init_db.py --project worklog-mcp --force
+
+# ダミーデータ投入（デフォルト: 7日間、10エントリー/日/ユーザー）
+uv run python scripts/seed_dummy_data.py --project worklog-mcp
+
+# カスタム設定でダミーデータ投入
+uv run python scripts/seed_dummy_data.py --project worklog-mcp --days 14 --entries-per-day 15
+
+# ヘルプ表示
+uv run python scripts/init_db.py --help
+uv run python scripts/seed_dummy_data.py --help
+```
+
+#### ダミーデータ内容
+- **ユーザー**: 田中太郎、山田花子、佐藤次郎、鈴木美咲、高橋健一（5名）
+- **分報内容**: 作業開始、技術調査、バグ修正、ミーティング、休憩、振り返り等のリアルな分報
+- **スレッド機能**: 10%確率で他ユーザーの分報に返信
+- **統計情報**: 投入完了時にユーザー別統計を表示
+
+### テストの実行
+
+```bash
+# 全テストの実行
+uv run pytest
+
+# カバレッジ付きテスト
+uv run pytest --cov=worklog_mcp
+
+# 特定テストファイルの実行
+uv run pytest tests/test_database.py
+```
+
+### コード品質チェック
+
+```bash
+# Ruffによるコードチェック
+uv run ruff check src/
+
+# コードフォーマット
+uv run ruff format src/
+```
+
+### MCPインスペクターでのテスト
+
+```bash
+# MCP機能のテスト（パッケージ版）
+uvx mcp-inspector uvx worklog-mcp --no-web
+
+# 開発版でのテスト
+uvx mcp-inspector uv run python -m worklog_mcp --no-web
+```
+
+### Webサーバーのテスト
+
+```bash
+# 統合サーバー起動
+uv run python -m worklog_mcp
+
+# API疎通確認
+curl http://localhost:8080/api/entries
+
+# SSE接続テスト
+curl -N http://localhost:8080/events
+```
+
+## 技術仕様
+
+### バックエンド
+- **言語**: Python 3.10+
+- **プロトコル**: Model Context Protocol (MCP)
+- **データベース**: SQLite (aiosqlite)
+- **非同期処理**: asyncio
+- **パッケージマネージャー**: uv
+
+### Webサーバー
+- **フレームワーク**: FastAPI
+- **サーバー**: uvicorn  
+- **リアルタイム通信**: Server-Sent Events (SSE)
+- **静的ファイル**: HTML/CSS/JavaScript (Vanilla)
+
+### 統合アーキテクチャ
+- **実行モード**: 1プロセス内でMCP+Web並行実行
+- **データ共有**: SQLiteデータベース直接共有
+- **通知システム**: MCP投稿 → SSE → Webクライアント即座更新
+
+## API仕様
+
+### プロジェクト管理ツール
+
+| ツール名 | 説明 | パラメータ |
+|---------|------|-----------|
+| `get_project_info` | プロジェクト情報表示 | なし |
+| `init_project_config` | 設定ファイル作成 | `project_name?`, `description?` |
+
+### 必須ツール
+
+| ツール名 | 説明 | 必須パラメータ |
+|---------|------|---------------|
+| `register_user` | ユーザー登録（初回必須） | `user_id`, `name`, `theme_color`(Red/Blue/Green/Yellow/Purple/Orange/Pink/Cyan), `role`, `personality`, `appearance` |
+| `post_worklog` | 分報投稿 | `user_id`, `markdown_content` |
+
+### 管理ツール
+
+| ツール名 | 説明 | パラメータ |
+|---------|------|-----------|
+| `reply_worklog` | 返信投稿 | `user_id`, `related_entry_id`, `markdown_content` |
+| `read_worklog_thread` | スレッド表示 | `user_id`, `entry_id` |
+
+### 検索・表示ツール
+
+| ツール名 | 説明 | パラメータ |
+|---------|------|-----------|
+| `read_timeline` | タイムライン取得 | `user_id`, `target_user_id?`, `hours?`, `count?` |
+| `search_worklogs` | 分報検索 | `user_id`, `keyword`, `target_user_id?`, `date_from?`, `date_to?` |
+| `read_user_worklogs` | 特定ユーザーの分報取得 | `user_id`, `target_user_id`, `hours?` |
+
+### 分析ツール
+
+| ツール名 | 説明 | パラメータ |
+|---------|------|-----------|
+| `generate_worklog_summary` | サマリー生成 | `user_id`, `target_user_id?`, `hours?` |
+| `get_user_stats` | 統計情報 | `user_id`, `target_user_id` |
+| `get_team_status` | チーム状況 | `user_id` |
+| `list_users` | ユーザー一覧 | `user_id` |
+
+## セキュリティ
+
+- **データプライバシー**: 全データはローカルに保存
+- **ステートレス設計**: サーバー側でユーザー状態を保持しない
+- **明示的認証**: 全ての操作で呼び出し元ユーザーIDが必須
+- **入力検証**: SQLインジェクション対策、user_ID検証
+- **マルチユーザー**: ユーザー間のデータ分離
+
+## トラブルシューティング
+
+### Claude Desktopで認識されない場合
+
+1. **パスの確認**: 絶対パスで指定されているか確認
+2. **パッケージの存在確認**: ファイルが実際に存在するか確認
+3. **権限の確認**: ファイルに実行権限があるか確認
+4. **ログの確認**: Claude Desktopのログでエラー内容を確認
+
+### よくあるエラー
+
+- **"Already running asyncio"**: 通常は無害。サーバーは正常に動作します
+- **"ユーザーID 'xxx' が見つかりません"**: user_idが未登録。初回は`register_user`を実行
+- **"user_idは英数字..."**: user_idは英数字、ハイフン、アンダースコアのみ使用可能
+- **Webサーバー接続エラー**: ポートが使用中の場合は`--web-port`で別ポートを指定
+
+### デバッグ方法
+
+```bash
+# 直接実行してエラーを確認（統合サーバー）
+uv run python -m worklog_mcp
+
+# MCPサーバーのみでテスト
+uv run python -m worklog_mcp --no-web
+
+# MCPインスペクターでテスト
+uvx mcp-inspector uv run python -m worklog_mcp --no-web
+
+# Webサーバーのログ確認
+uv run python -m worklog_mcp --web-port 8080
+# 別ターミナルで: curl -v http://localhost:8080/api/entries
+```
+
+## ライセンス
+
+MIT License
+
+## 貢献
+
+プルリクエストや課題報告をお待ちしています。
+
+---
+
+分報MCPサーバーで、チームの情報共有を効率化しましょう！
