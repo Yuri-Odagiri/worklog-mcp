@@ -18,7 +18,7 @@ from worklog_mcp.database import Database
 from worklog_mcp.event_bus import EventBus
 from worklog_mcp.logging_config import setup_logging
 from worklog_mcp.project_context import ProjectContext
-from worklog_mcp.server import create_server_standalone
+from worklog_mcp.server import create_server
 
 # ロガー設定
 log_file_path = setup_logging()
@@ -64,7 +64,7 @@ async def run_mcp_server(project_path: str) -> None:
         await event_bus.initialize()
 
         # MCPサーバーの作成と実行
-        mcp = await create_server_standalone(db, project_context, event_bus)
+        mcp = await create_server(db, project_context, event_bus)
 
         logger.info(
             f"MCPサーバー起動 (プロジェクト: {project_context.get_project_name()})"
