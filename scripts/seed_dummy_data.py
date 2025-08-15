@@ -221,13 +221,14 @@ def generate_worklog_content(template: str) -> str:
     return content
 
 
-async def seed_dummy_data(project_name: str, days: int = 7, entries_per_day: int = 10):
+async def seed_dummy_data(project_name: str, days: int = 7, entries_per_day: int = 10, clear: bool = False):
     """ダミーデータを投入する
 
     Args:
         project_name: プロジェクト名
         days: 何日分のデータを生成するか
         entries_per_day: 1日あたりのエントリー数（ユーザーあたり）
+        clear: 既存のデータをクリアするか
     """
     db_path = Path.home() / ".worklog" / project_name / "database" / "worklog.db"
 
@@ -243,6 +244,18 @@ async def seed_dummy_data(project_name: str, days: int = 7, entries_per_day: int
 
     logger.info(f"ダミーデータを投入中: {db_path}")
     logger.info(f"設定: {days}日分、1日あたり{entries_per_day}エントリー/ユーザー")
+    
+    # デフォルトで既存データをクリア
+    if clear:
+        logger.info("既存データをクリア中...")
+        import aiosqlite
+        async with aiosqlite.connect(db_file_path) as conn:
+            await conn.execute("DELETE FROM entries")
+            await conn.execute("DELETE FROM users")
+            await conn.commit()
+        logger.info("既存データをクリアしました")
+    else:
+        logger.info("既存データを保持して追加投入します")
 
     # プロジェクトコンテキストをダミー作成（アバター生成用）
     from worklog_mcp.project_context import ProjectContext
@@ -273,7 +286,6 @@ async def seed_dummy_data(project_name: str, days: int = 7, entries_per_day: int
     logger.info("\n分報エントリーを作成中...")
     now = datetime.now()
     entry_count = 0
-    thread_parents = []  # スレッド返信用の親エントリー
 
     for day in range(days):
         base_date = now - timedelta(days=days - day - 1)
@@ -294,30 +306,16 @@ async def seed_dummy_data(project_name: str, days: int = 7, entries_per_day: int
                 template = random.choice(WORKLOG_TEMPLATES)
                 content = generate_worklog_content(template)
 
-                # たまにスレッド返信を作成（10%の確率）
-                related_entry_id = None
-                if thread_parents and random.random() < 0.1:
-                    parent = random.choice(thread_parents)
-                    related_entry_id = parent.id
-                    content = f"@{parent.user_id} {content}"
 
                 entry = WorklogEntry(
                     id=str(uuid.uuid4()),
                     user_id=user_id,
                     markdown_content=content,
-                    related_entry_id=related_entry_id,
                     created_at=entry_time,
                 )
 
                 await db.create_entry(entry)
                 entry_count += 1
-
-                # 親エントリーとして記録（スレッド用）
-                if not related_entry_id and random.random() < 0.3:
-                    thread_parents.append(entry)
-                    # 古いエントリーは削除（メモリ節約）
-                    if len(thread_parents) > 20:
-                        thread_parents.pop(0)
 
                 # 進捗表示
                 if entry_count % 50 == 0:
@@ -341,12 +339,6 @@ async def seed_dummy_data(project_name: str, days: int = 7, entries_per_day: int
         total_entries = (await cursor.fetchone())[0]
         logger.info(f"総エントリー数: {total_entries}")
 
-        # スレッド数
-        cursor = await conn.execute(
-            "SELECT COUNT(*) FROM entries WHERE related_entry_id IS NOT NULL"
-        )
-        thread_count = (await cursor.fetchone())[0]
-        logger.info(f"スレッド返信数: {thread_count}")
 
     # ユーザー別統計
     logger.info("\n=== ユーザー別統計 ===")
@@ -383,11 +375,17 @@ def main():
         default=10,
         help="1日あたりのエントリー数/ユーザー (デフォルト: 10)",
     )
+    parser.add_argument(
+        "--keep",
+        "-k",
+        action="store_true",
+        help="既存のデータを保持したまま追加投入（デフォルトはクリア）",
+    )
 
     args = parser.parse_args()
 
     try:
-        asyncio.run(seed_dummy_data(args.project, args.days, args.entries_per_day))
+        asyncio.run(seed_dummy_data(args.project, args.days, args.entries_per_day, not args.keep))
     except KeyboardInterrupt:
         logger.info("\n処理を中断しました")
         sys.exit(1)
