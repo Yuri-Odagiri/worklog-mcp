@@ -9,8 +9,8 @@ from mcp.server.fastmcp import FastMCP
 
 from ..database import Database
 
-# Import the logging decorator from the main tools module
-from ..tools import log_mcp_tool
+# Import the logging decorator from utils
+from ..utils import log_mcp_tool
 
 
 def register_worklog_reading_tools(

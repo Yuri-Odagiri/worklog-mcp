@@ -11,8 +11,8 @@ from mcp.server.fastmcp import FastMCP
 from ..database import Database
 from ..models import User
 
-# Import the logging decorator from the main tools module
-from ..tools import log_mcp_tool
+# Import the logging decorator from utils
+from ..utils import log_mcp_tool
 
 
 def register_user_management_tools(
