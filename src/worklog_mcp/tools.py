@@ -21,7 +21,10 @@ def log_mcp_tool(func: Callable) -> Callable:
 
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
+        import time
+
         tool_name = func.__name__
+        start_time = time.perf_counter()
 
         # リクエストのログ出力（機密情報を除外）
         sanitized_kwargs = {}
@@ -41,6 +44,10 @@ def log_mcp_tool(func: Callable) -> Callable:
             # ツール実行
             result = await func(*args, **kwargs)
 
+            # 実行時間を計算
+            end_time = time.perf_counter()
+            duration_ms = (end_time - start_time) * 1000
+
             # レスポンスのログ出力（大きなレスポンスは省略）
             if isinstance(result, (dict, list)):
                 result_preview = json.dumps(result, ensure_ascii=False, default=str)[
@@ -48,18 +55,27 @@ def log_mcp_tool(func: Callable) -> Callable:
                 ]
                 if len(str(result)) > 1000:
                     result_preview += "... (truncated)"
-                logger.info(f"MCP Tool Response - {tool_name}: {result_preview}")
+                logger.info(
+                    f"MCP Tool Response - {tool_name} ({duration_ms:.1f}ms): {result_preview}"
+                )
             elif isinstance(result, str) and len(result) > 1000:
                 logger.info(
-                    f"MCP Tool Response - {tool_name}: {result[:1000]}... (truncated)"
+                    f"MCP Tool Response - {tool_name} ({duration_ms:.1f}ms): {result[:1000]}... (truncated)"
                 )
             else:
-                logger.info(f"MCP Tool Response - {tool_name}: {result}")
+                logger.info(
+                    f"MCP Tool Response - {tool_name} ({duration_ms:.1f}ms): {result}"
+                )
 
             return result
 
         except Exception as e:
-            logger.error(f"MCP Tool Error - {tool_name}: {type(e).__name__}: {str(e)}")
+            # エラー時も実行時間を計算
+            end_time = time.perf_counter()
+            duration_ms = (end_time - start_time) * 1000
+            logger.error(
+                f"MCP Tool Error - {tool_name} ({duration_ms:.1f}ms): {type(e).__name__}: {str(e)}"
+            )
             raise
 
     return wrapper
@@ -97,9 +113,9 @@ def register_tools(
     async def register_user(
         user_id: str,
         name: str,
+        role: str,
         ctx: Context,
         theme_color: str = "Blue",
-        role: str = "メンバー",
         personality: str = "明るく協力的で、チームワークを重視する性格です。",
         appearance: str = "親しみやすい外見で、いつも笑顔を絶やしません。",
     ) -> str:
@@ -108,15 +124,15 @@ def register_tools(
         Args:
             user_id: あなたのユーザーID（英数字、ハイフン、アンダースコアのみ）
             name: あなたのユーザー名(表示名)
+            role: あなたの役割（必須）
             theme_color: あなたのテーマカラー（Red/Blue/Green/Yellow/Purple/Orange/Pink/Cyanのみ）
-            role: あなたの役割
             personality: あなたの性格（想像で設定可能）。300文字程度。
             appearance: あなたの詳細な見た目（想像で設定可能）。性別、年齢、髪の色、肌の色等詳細に500文字程度。
         """
         try:
             # バリデーション
-            if not user_id or not name:
-                raise ValueError("user_idとnameは必須です")
+            if not user_id or not name or not role:
+                raise ValueError("user_id、name、roleは必須です")
 
             # user_idの形式チェック
             if not re.match(r"^[a-zA-Z0-9-_]+$", user_id):

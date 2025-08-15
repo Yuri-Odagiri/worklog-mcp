@@ -17,8 +17,8 @@ class User:
 
     user_id: str
     name: str
+    role: str  # 役割（必須）
     theme_color: str = "Blue"  # Red/Blue/Green/Yellow/Purple/Orange/Pink/Cyanのみ
-    role: str = "メンバー"  # デフォルトの役割
     personality: str = (
         "明るく協力的で、チームワークを重視する性格です。"  # デフォルトの性格
     )
