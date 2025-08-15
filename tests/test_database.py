@@ -35,7 +35,7 @@ async def test_database_initialization(db):
 @pytest.mark.asyncio
 async def test_user_creation(db):
     """ユーザー作成のテスト"""
-    user = User(user_id="test-user", name="テストユーザー")
+    user = User(user_id="test-user", name="テストユーザー", role="開発者")
     
     # ユーザー作成
     await db.create_user(user)
@@ -55,14 +55,14 @@ async def test_user_validation():
     """ユーザーバリデーションのテスト"""
     # 無効なuser_id
     with pytest.raises(ValueError):
-        User(user_id="invalid@user", name="Invalid User")
+        User(user_id="invalid@user", name="Invalid User", role="テスター")
 
 
 @pytest.mark.asyncio
 async def test_entry_creation(db):
     """エントリー作成のテスト"""
     # ユーザー作成
-    user = User(user_id="test-user", name="テストユーザー")
+    user = User(user_id="test-user", name="テストユーザー", role="開発者")
     await db.create_user(user)
     
     # エントリー作成
@@ -83,7 +83,7 @@ async def test_entry_creation(db):
 async def test_timeline_retrieval(db):
     """タイムライン取得のテスト"""
     # ユーザー作成
-    user = User(user_id="test-user", name="テストユーザー")
+    user = User(user_id="test-user", name="テストユーザー", role="開発者")
     await db.create_user(user)
     
     # 複数エントリー作成
@@ -111,7 +111,7 @@ async def test_timeline_retrieval(db):
 async def test_search_entries(db):
     """エントリー検索のテスト"""
     # ユーザー作成
-    user = User(user_id="test-user", name="テストユーザー")
+    user = User(user_id="test-user", name="テストユーザー", role="開発者")
     await db.create_user(user)
     
     # 検索対象エントリー作成
@@ -137,7 +137,7 @@ async def test_search_entries(db):
 async def test_entry_update(db):
     """エントリー更新のテスト"""
     # ユーザー作成
-    user = User(user_id="test-user", name="テストユーザー")
+    user = User(user_id="test-user", name="テストユーザー", role="開発者")
     await db.create_user(user)
     
     # エントリー作成
@@ -160,7 +160,7 @@ async def test_entry_update(db):
 async def test_thread_functionality(db):
     """スレッド機能のテスト"""
     # ユーザー作成
-    user = User(user_id="test-user", name="テストユーザー")
+    user = User(user_id="test-user", name="テストユーザー", role="開発者")
     await db.create_user(user)
     
     # メインエントリー作成
@@ -200,7 +200,7 @@ async def test_thread_functionality(db):
 async def test_user_stats(db):
     """ユーザー統計のテスト"""
     # ユーザー作成
-    user = User(user_id="test-user", name="テストユーザー")
+    user = User(user_id="test-user", name="テストユーザー", role="開発者")
     await db.create_user(user)
     
     # エントリー作成
@@ -224,8 +224,8 @@ async def test_user_stats(db):
 async def test_multiuser_functionality(db):
     """マルチユーザー機能のテスト"""
     # 複数ユーザー作成
-    user1 = User(user_id="user1", name="ユーザー1")
-    user2 = User(user_id="user2", name="ユーザー2")
+    user1 = User(user_id="user1", name="ユーザー1", role="開発者")
+    user2 = User(user_id="user2", name="ユーザー2", role="デザイナー")
     
     await db.create_user(user1)
     await db.create_user(user2)

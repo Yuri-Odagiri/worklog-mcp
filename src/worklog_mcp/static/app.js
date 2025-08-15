@@ -545,13 +545,75 @@ class SimpleWorklogViewer {
      */
     getAvatarUrl(avatarPath, userId) {
         if (!avatarPath) {
-            // フォールバック: グラデーション画像を試行
-            return `/avatar/${userId}_gradient.png`;
+            // 動的アバター生成: ファイルではなくSVGデータURLを返す
+            return this.generateDynamicAvatar(userId);
         }
         
         // ファイル名だけを抽出
         const fileName = avatarPath.split('/').pop();
         return `/avatar/${fileName}`;
+    }
+
+    /**
+     * 動的にグラデーションアバターを生成（SVG Data URL）
+     */
+    generateDynamicAvatar(userId) {
+        // ユーザーのテーマカラーを取得（存在しない場合はBlueをデフォルト）
+        const user = this.users[userId];
+        const themeColor = user ? user.theme_color : 'Blue';
+        
+        // テーマカラーから基本色を取得
+        const baseColor = this.getThemeBaseColor(themeColor);
+        
+        // user_idから決定的な種値を生成（文字の合計値を使用）
+        let seed = 0;
+        for (let i = 0; i < userId.length; i++) {
+            seed += userId.charCodeAt(i);
+        }
+        
+        // 種値を使って色のバリエーションを生成
+        const hue = baseColor.hue + (seed % 60) - 30; // ±30度の範囲で色相を調整
+        const saturation = Math.max(40, Math.min(80, baseColor.saturation + (seed % 20) - 10)); // 彩度調整
+        
+        // グラデーションの開始色と終了色を計算
+        const startColor = `hsl(${hue}, ${saturation}%, 75%)`;
+        const endColor = `hsl(${hue}, ${saturation}%, 45%)`;
+        
+        // SVGグラデーションアバターを生成
+        const svg = `
+            <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <radialGradient id="avatarGradient_${userId}" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="${startColor}" stop-opacity="0.9"/>
+                        <stop offset="70%" stop-color="${endColor}" stop-opacity="0.8"/>
+                        <stop offset="100%" stop-color="${endColor}" stop-opacity="0.6"/>
+                    </radialGradient>
+                </defs>
+                <circle cx="256" cy="256" r="246" fill="url(#avatarGradient_${userId})" stroke="${endColor}" stroke-width="4"/>
+            </svg>
+        `;
+        
+        // SVGをData URLに変換
+        const dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+        return dataUrl;
+    }
+
+    /**
+     * テーマカラーから基本HSL値を取得
+     */
+    getThemeBaseColor(themeColor) {
+        const colorMap = {
+            'Red': { hue: 0, saturation: 70 },
+            'Blue': { hue: 210, saturation: 65 },
+            'Green': { hue: 120, saturation: 60 },
+            'Yellow': { hue: 45, saturation: 75 },
+            'Purple': { hue: 270, saturation: 65 },
+            'Orange': { hue: 30, saturation: 80 },
+            'Pink': { hue: 330, saturation: 70 },
+            'Cyan': { hue: 180, saturation: 65 }
+        };
+        
+        return colorMap[themeColor] || colorMap['Blue']; // デフォルトはBlue
     }
     
     /**

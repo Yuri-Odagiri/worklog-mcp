@@ -6,12 +6,14 @@ Model Context Protocol (MCP) を使用した分報管理サーバー + Webビュ
 
 分報MCPサーバーは、リアルタイムの作業ログ（分報）の記録・管理・検索機能をAIアシスタントに提供するPythonパッケージです。`uvx`コマンドで簡単に起動でき、複数ユーザーの細かい作業記録を時系列で管理します。
 
-**NEW**: 統合Webビューアーで、ブラウザからリアルタイムの分報閲覧が可能になりました！
+**NEW**: 完全独立アーキテクチャ！MCPサーバーとWebビューアーが分離され、それぞれ個別起動可能になりました！
 
 ## 特徴
 
 - 🚀 **簡単起動**: `uvx`コマンドで環境を汚さずに実行
-- 🌐 **統合Webビューアー**: ブラウザでのリアルタイム分報閲覧
+- 🔧 **独立アーキテクチャ**: MCPサーバーとWebビューアーを個別または統合で起動可能
+- 🌐 **Webビューアー**: ブラウザでのリアルタイム分報閲覧（独立起動対応）
+- 🔄 **プロセス間通信**: SQLiteベースのイベントバスによる非同期通信
 - 🏗️ **プロジェクト分離**: プロジェクト単位での完全なデータ分離
 - 👥 **マルチユーザー対応**: チームメンバーの分報を統合管理
 - 🎨 **AI生成アバター**: OpenAI GPT-5による個性的なアバター自動生成（リアルタイム更新対応）
@@ -22,6 +24,14 @@ Model Context Protocol (MCP) を使用した分報管理サーバー + Webビュ
 - ⚡ **リアルタイム更新**: Server-Sent EventsによるWebUI即座更新
 
 ## インストールと起動
+
+### 起動方法の選択
+
+分報MCPサーバーは3つの方法で起動できます：
+
+1. **MCPサーバーのみ**: Claude Desktop等からMCP経由でのみ利用
+2. **Webビューアーのみ**: ブラウザでの閲覧専用
+3. **統合起動**: MCPサーバーとWebビューアーを同時起動（推奨）
 
 ### 方法1: 開発モード（最も簡単）
 
@@ -35,11 +45,16 @@ cd worklog-mcp
 # 依存関係のインストール
 uv sync
 
-# 統合サーバー起動（MCP + Webビューアー）
-uv run python -m worklog_mcp
+# === 起動方法の選択 ===
 
-# カスタムポートでWebサーバー起動
-uv run python -m worklog_mcp --web-port 3000
+# 1. MCPサーバーのみ起動
+uv run python -m worklog_mcp.mcp_server --project .
+
+# 2. Webビューアーのみ起動
+uv run python -m worklog_mcp.web_server --project . --port 8080
+
+# 3. 統合起動（推奨）
+uv run python -m worklog_mcp --project . --web-port 8080
 ```
 
 ### 方法2: uvxでの実行（配布用）
@@ -47,16 +62,21 @@ uv run python -m worklog_mcp --web-port 3000
 `uvx`は単一パッケージの実行に特化したツールです：
 
 ```bash
-# PyPI公開後の実行（統合サーバー）
-uvx worklog-mcp
+# === PyPI公開後の実行 ===
 
-# カスタムポートでWebサーバー起動
-uvx worklog-mcp --web-port 3000
+# 1. MCPサーバーのみ
+uvx worklog-mcp.mcp_server --project .
 
-# ローカルパッケージの実行
+# 2. Webビューアーのみ
+uvx worklog-mcp.web_server --project . --port 8080
+
+# 3. 統合起動
+uvx worklog-mcp --project . --web-port 8080
+
+# === ローカルパッケージでの実行 ===
 uvx /path/to/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl
 
-# Git リポジトリから直接実行
+# === Git リポジトリから直接実行 ===
 uvx --from git+https://github.com/Yuri-Odagiri/worklog-mcp.git worklog-mcp
 ```
 
@@ -140,17 +160,36 @@ export WORKLOG_BASE_PATH="/custom/path"
 - APIキーが未設定でも基本機能は正常に動作します（グラデーションアバター使用）
 - セキュリティのため、APIキーを公開リポジトリにコミットしないよう注意してください
 
-## Webビューアー機能
+## 新アーキテクチャ: 独立起動システム
 
-### アクセス方法
+### アーキテクチャの特徴
 
-統合サーバー起動後、以下のURLでアクセス可能：
+分報MCPサーバーは完全に独立したアーキテクチャに進化しました：
+
+- **MCPサーバー**: Claude Desktop等からのMCP通信専用
+- **Webビューアー**: ブラウザでの閲覧・操作専用  
+- **イベントバス**: SQLiteベースでプロセス間通信
+- **統合起動**: 便利用として両方を自動起動
+
+### プロセス間通信
+
+```
+MCPサーバー → イベントバス → Webビューアー → ブラウザ
+     ↓              ↓              ↓           ↓
+ 分報投稿      SQLiteイベント    SSE通知   リアルタイム更新
+```
+
+### Webビューアー機能
+
+#### アクセス方法
+
+Webビューアー起動後、以下のURLでアクセス可能：
 
 - **Webビューアー**: `http://localhost:8080`
 - **REST API**: `http://localhost:8080/api/*`
 - **SSEストリーム**: `http://localhost:8080/events`
 
-### Webビューアーの機能
+#### 主な機能
 
 - **リアルタイム更新**: MCP経由の投稿が即座にWebUIに反映
 - **アバター自動更新**: AI生成完了時に表示中のアバターが自動切り替え
@@ -160,14 +199,19 @@ export WORKLOG_BASE_PATH="/custom/path"
   - `Ctrl+R` / `Cmd+R`: 更新
   - `Ctrl+F` / `Cmd+F`: 検索欄にフォーカス
 
-### 運用モード
+#### 起動例
 
 ```bash
-# 統合モード（推奨）: MCP + Webビューアー
-uv run python -m worklog_mcp
+# === 個別起動 ===
 
-# 開発モード: カスタムポート
-uv run python -m worklog_mcp --web-port 3000
+# MCPサーバーのみ（バックグラウンド）
+uv run python -m worklog_mcp.mcp_server --project . &
+
+# Webビューアーのみ
+uv run python -m worklog_mcp.web_server --project . --port 8080
+
+# === 統合起動（推奨） ===
+uv run python -m worklog_mcp --project . --web-port 8080
 ```
 
 ## プロジェクト分離機能
@@ -192,27 +236,30 @@ uvx worklog-mcp
 
 - **データベース**: `{WORKLOG_BASE_PATH}/{project_name}/database/worklog.db`
 - **アバター画像**: `{WORKLOG_BASE_PATH}/{project_name}/avatar/{user_id}.png` 
+- **イベントバス**: `{WORKLOG_BASE_PATH}/{project_name}/events/event_bus.db`
 - **プロジェクト名**: `--project`で指定したパス（未指定時は現在のディレクトリ）から自動生成
 
 ## Claude Desktop での設定
 
-### 方法1: Claude Code (推奨)
+### MCP設定（推奨）
 
-Claude Codeを使用してMCPサーバーを追加：
+Claude DesktopでMCPサーバーとして利用する場合：
+
+#### 方法1: Claude Code (推奨)
 
 ```bash
-# プロジェクト分離ありで追加
-claude mcp add worklog-project -s project -- uv run python -m worklog_mcp --project プロジェクト名
+# MCPサーバーのみ（通常の使用方法）
+claude mcp add worklog-project -s project -- uv run python -m worklog_mcp.mcp_server --project .
 
 # 現在のディレクトリをプロジェクトとして追加
 cd /path/to/your-project
-claude mcp add worklog-current -s project -- uv run python -m worklog_mcp
+claude mcp add worklog-current -s project -- uv run python -m worklog_mcp.mcp_server
 
 # Gitリポジトリから直接追加
-claude mcp add worklog -s project -- uvx --from git+https://github.com/Yuri-Odagiri/worklog-mcp.git worklog-mcp
+claude mcp add worklog -s project -- uvx --from git+https://github.com/Yuri-Odagiri/worklog-mcp.git worklog-mcp.mcp_server
 ```
 
-### 方法2: 手動設定（開発モード）
+#### 方法2: 手動設定（開発モード）
 
 開発環境から直接実行する場合：
 
@@ -221,12 +268,12 @@ claude mcp add worklog -s project -- uvx --from git+https://github.com/Yuri-Odag
   "mcpServers": {
     "worklog-project-a": {
       "command": "uv",
-      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project-a"],
+      "args": ["run", "python", "-m", "worklog_mcp.mcp_server", "--project", "/path/to/project-a"],
       "cwd": "/absolute/path/to/worklog-mcp"
     },
     "worklog-project-b": {
       "command": "uv", 
-      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project-b"],
+      "args": ["run", "python", "-m", "worklog_mcp.mcp_server", "--project", "/path/to/project-b"],
       "cwd": "/absolute/path/to/worklog-mcp"
     }
   }
@@ -234,22 +281,31 @@ claude mcp add worklog -s project -- uvx --from git+https://github.com/Yuri-Odag
 ```
 
 **注意**: 
+- MCPサーバーは`worklog_mcp.mcp_server`を使用（Webビューアーは含まれません）
 - `cwd`は`worklog-mcp`プロジェクトディレクトリの絶対パス
 - `--project`引数でプロジェクトディレクトリを指定
 - 複数プロジェクトで完全にデータが分離される
 
-### 統合Webビューアーの起動
+### Webビューアーの起動
 
 Claude Desktop設定とは別に、Webビューアーを起動：
 
 ```bash
-# 同じプロジェクトでWebビューアー起動
+# === Webビューアーのみ起動 ===
 cd /path/to/project-a
-uv run python -m worklog_mcp
+uv run python -m worklog_mcp.web_server --project . --port 8080
+
+# === 統合起動（MCPサーバー + Webビューアー） ===
+uv run python -m worklog_mcp --project . --web-port 8080
 
 # ブラウザでアクセス
 open http://localhost:8080
 ```
+
+**使い分け:**
+- **MCPサーバーのみ**: Claude Desktop経由でのみ利用
+- **Webビューアーのみ**: ブラウザでの閲覧専用（データは既存のものを参照）
+- **統合起動**: MCPとWebの両方が必要な場合
 
 ### 方法3: ローカルパッケージでの実行
 
@@ -260,7 +316,7 @@ open http://localhost:8080
   "mcpServers": {
     "worklog-project-a": {
       "command": "uvx",
-      "args": ["/absolute/path/to/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl", "--project", "/path/to/project-a"]
+      "args": ["/absolute/path/to/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl", "mcp_server", "--project", "/path/to/project-a"]
     }
   }
 }
@@ -279,7 +335,7 @@ open http://localhost:8080
   "mcpServers": {
     "worklog": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/Yuri-Odagiri/worklog-mcp.git", "worklog-mcp"]
+      "args": ["--from", "git+https://github.com/Yuri-Odagiri/worklog-mcp.git", "worklog-mcp", "mcp_server", "--project", "."]
     }
   }
 }
@@ -295,7 +351,7 @@ PyPI公開後の実行：
   "mcpServers": {
     "worklog": {
       "command": "uvx",
-      "args": ["worklog-mcp"]
+      "args": ["worklog-mcp", "mcp_server", "--project", "."]
     }
   }
 }
@@ -373,6 +429,8 @@ JWTトークンの有効期限設定がうまくいかない"
 ├── {project_name}/
 │   ├── database/
 │   │   └── worklog.db          # SQLiteデータベース
+│   ├── events/
+│   │   └── event_bus.db        # イベントバス（プロセス間通信）
 │   └── avatar/
 │       ├── {user_id}_gradient.png  # グラデーションアバター（即座表示）
 │       ├── {user_id}_ai.png        # AI生成アバター（バックグラウンド生成）
@@ -382,6 +440,7 @@ JWTトークンの有効期限設定がうまくいかない"
 
 ### 保存パス
 - **データベース**: `{WORKLOG_BASE_PATH}/{project_name}/database/worklog.db`
+- **イベントバス**: `{WORKLOG_BASE_PATH}/{project_name}/events/event_bus.db`
 - **アバター画像**: `{WORKLOG_BASE_PATH}/{project_name}/avatar/` ディレクトリ
   - グラデーション: `{user_id}_gradient.png`（登録時即座生成）
   - AI生成: `{user_id}_ai.png`（バックグラウンド生成、自動切り替え）
@@ -483,24 +542,39 @@ uv run ruff format src/
 ### MCPインスペクターでのテスト
 
 ```bash
-# MCP機能のテスト（パッケージ版）
-npx @modelcontextprotocol/inspector uvx worklog-mcp
+# === MCPサーバー単体テスト ===
 
 # 開発版でのテスト
-npx @modelcontextprotocol/inspector uv run python -m worklog_mcp
+npx @modelcontextprotocol/inspector uv run python -m worklog_mcp.mcp_server --project .
+
+# パッケージ版でのテスト（PyPI公開後）
+npx @modelcontextprotocol/inspector uvx worklog-mcp mcp_server --project .
 ```
 
 ### Webサーバーのテスト
 
 ```bash
-# 統合サーバー起動
-uv run python -m worklog_mcp
+# === Webビューアー単体テスト ===
 
-# API疎通確認
+# Webビューアーのみ起動
+uv run python -m worklog_mcp.web_server --project . --port 8080
+
+# === 統合テスト ===
+
+# 統合サーバー起動
+uv run python -m worklog_mcp --project . --web-port 8080
+
+# === API疎通確認 ===
+
+# 基本API確認
 curl http://localhost:8080/api/entries
 
 # SSE接続テスト
 curl -N http://localhost:8080/events
+
+# イベントバス確認（プロセス間通信テスト）
+# - MCPサーバーで分報投稿
+# - Webビューアーでリアルタイム更新を確認
 ```
 
 ## 技術仕様
@@ -520,10 +594,11 @@ curl -N http://localhost:8080/events
 - **リアルタイム通信**: Server-Sent Events (SSE)
 - **静的ファイル**: HTML/CSS/JavaScript (Vanilla)
 
-### 統合アーキテクチャ
-- **実行モード**: 1プロセス内でMCP+Web並行実行
-- **データ共有**: SQLiteデータベース直接共有
-- **通知システム**: MCP投稿 → SSE → Webクライアント即座更新
+### 新アーキテクチャ
+- **独立プロセス**: MCPサーバーとWebビューアーが完全分離
+- **プロセス間通信**: SQLiteベースのイベントバス
+- **通知システム**: MCP投稿 → イベントバス → SSE → Webクライアント即座更新
+- **統合起動**: 便利用として両プロセスを自動管理
 
 ## API仕様
 
@@ -591,18 +666,33 @@ curl -N http://localhost:8080/events
 ### デバッグ方法
 
 ```bash
-# 直接実行してエラーを確認（統合サーバー）
-uv run python -m worklog_mcp
+# === 個別デバッグ ===
 
 # MCPサーバーのみでテスト
-uv run python -m worklog_mcp
+uv run python -m worklog_mcp.mcp_server --project .
+
+# Webビューアーのみでテスト
+uv run python -m worklog_mcp.web_server --project . --port 8080
+
+# === 統合デバッグ ===
+
+# 統合サーバーでテスト
+uv run python -m worklog_mcp --project . --web-port 8080
+
+# === MCP機能デバッグ ===
 
 # MCPインスペクターでテスト
-npx @modelcontextprotocol/inspector uv run python -m worklog_mcp
+npx @modelcontextprotocol/inspector uv run python -m worklog_mcp.mcp_server --project .
 
-# Webサーバーのログ確認
-uv run python -m worklog_mcp --web-port 8080
-# 別ターミナルで: curl -v http://localhost:8080/api/entries
+# === Web機能デバッグ ===
+
+# API疎通確認
+curl -v http://localhost:8080/api/entries
+
+# イベントバス動作確認
+# 1. MCPサーバーとWebビューアーを個別起動
+# 2. MCPから分報投稿
+# 3. Webでリアルタイム更新確認
 ```
 
 ## ライセンス

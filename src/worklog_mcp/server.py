@@ -1,13 +1,16 @@
 """MCPサーバーの実装"""
 
 import logging
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from mcp.server.fastmcp import FastMCP
 
 from .database import Database
 from .project_context import ProjectContext
 from .tools import register_tools
+
+if TYPE_CHECKING:
+    from .event_bus import EventBus
 from .logging_config import setup_logging
 
 # ログ設定を確実に初期化
@@ -17,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 async def create_server(project_path: Optional[str] = None, web_server=None) -> FastMCP:
-    """MCPサーバーのインスタンスを作成（Web連携対応）"""
+    """MCPサーバーのインスタンスを作成（統合起動用・下位互換性維持）"""
     # プロジェクトコンテキストの初期化
     project_context = ProjectContext(project_path)
 
@@ -51,8 +54,27 @@ async def create_server(project_path: Optional[str] = None, web_server=None) -> 
     return mcp
 
 
+async def create_server_standalone(
+    db: Database, project_context: ProjectContext, event_bus: "EventBus"
+) -> FastMCP:
+    """スタンドアロンMCPサーバーのインスタンスを作成"""
+    # MCPサーバーのインスタンス作成
+    server_name = f"worklog-mcp-{project_context.get_project_name()}"
+    mcp = FastMCP(server_name)
+
+    # ツールの登録（イベントバスを渡す）
+    from .tools import register_tools_standalone
+
+    register_tools_standalone(mcp, db, project_context, event_bus)
+
+    logger.info(
+        f"スタンドアロンMCPサーバーの初期化が完了しました (プロジェクト: {project_context.get_project_name()})"
+    )
+    return mcp
+
+
 def run_server(project_path: Optional[str] = None) -> None:
-    """MCPサーバーの起動と実行"""
+    """MCPサーバーの起動と実行（下位互換性維持）"""
     try:
         import asyncio
 
@@ -60,7 +82,7 @@ def run_server(project_path: Optional[str] = None) -> None:
             # サーバー作成
             mcp = await create_server(project_path)
 
-            # サーバー実行（統合サーバーと同じ方法を使用）
+            # サーバー実行
             await mcp.run_stdio_async()
 
         # asyncio実行

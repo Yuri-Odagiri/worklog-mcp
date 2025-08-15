@@ -19,7 +19,7 @@ def test_generate_id():
 
 def test_user_model():
     """Userモデルのテスト"""
-    user = User(user_id="test-user", name="テストユーザー")
+    user = User(user_id="test-user", name="テストユーザー", role="開発者")
     
     assert user.user_id == "test-user"
     assert user.name == "テストユーザー"
@@ -32,14 +32,14 @@ def test_user_id_validation():
     # 有効なuser_id
     valid_ids = ["user1", "test-user", "user_123", "test_user"]
     for user_id in valid_ids:
-        user = User(user_id=user_id, name="テストユーザー")
+        user = User(user_id=user_id, name="テストユーザー", role="開発者")
         assert user.user_id == user_id
     
     # 無効なuser_id
     invalid_ids = ["user@domain", "user space", "ユーザー1", "user.123"]
     for user_id in invalid_ids:
         with pytest.raises(ValueError):
-            User(user_id=user_id, name="テストユーザー")
+            User(user_id=user_id, name="テストユーザー", role="開発者")
 
 
 def test_worklog_entry_model():

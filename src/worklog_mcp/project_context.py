@@ -86,6 +86,21 @@ class ProjectContext:
 
         return str(database_dir / "worklog.db")
 
+    def get_event_bus_path(self) -> Path:
+        """プロジェクト専用のイベントバスパスを取得"""
+        base_path = os.environ.get(
+            "WORKLOG_BASE_PATH", os.path.expanduser("~/.worklog")
+        )
+
+        # プロジェクト名でディレクトリを分離
+        project_dir = Path(base_path) / self.get_project_name()
+        event_bus_dir = project_dir / "events"
+
+        # ディレクトリ作成
+        event_bus_dir.mkdir(parents=True, exist_ok=True)
+
+        return event_bus_dir / "event_bus.db"
+
     def get_avatar_path(self) -> str:
         """プロジェクト専用のアバターディレクトリパスを取得"""
         base_path = os.environ.get(
