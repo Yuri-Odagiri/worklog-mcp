@@ -728,6 +728,7 @@ class SimpleWorklogViewer {
                      onerror="this.outerHTML='<div class=\\'user-card-avatar error\\'>👤</div>'">
                 <div class="user-card-info">
                     <h3 style="color: ${themeStyle.text};">${this.escapeHtml(user.name)}</h3>
+                    <div class="user-card-id">ID: ${this.escapeHtml(user.user_id)}</div>
                     ${user.role ? `<div class="user-card-role" style="background-color: ${themeStyle.background}; color: ${themeStyle.text};">${this.escapeHtml(user.role)}</div>` : ''}
                     <div class="user-card-theme">テーマ: ${user.theme_color}</div>
                 </div>

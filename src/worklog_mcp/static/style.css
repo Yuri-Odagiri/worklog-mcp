@@ -406,6 +406,13 @@ body {
     color: #2c3e50;
 }
 
+.user-card-id {
+    font-size: 0.8em;
+    color: #6c757d;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    margin-bottom: 6px;
+}
+
 .user-card-role {
     display: inline-block;
     padding: 4px 8px;
