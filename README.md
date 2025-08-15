@@ -216,6 +216,32 @@ uv run python -m worklog_mcp --project . --web-port 8080
 
 ## プロジェクト分離機能
 
+### `--project`オプションの詳細仕様
+
+分報MCPサーバーは`--project`オプションでプロジェクトディレクトリを指定できます：
+
+```bash
+# 明示的にプロジェクトディレクトリを指定
+uvx worklog-mcp --project /path/to/project-a
+
+# 相対パスでの指定
+uvx worklog-mcp --project ./my-project
+
+# カレントディレクトリを指定
+uvx worklog-mcp --project .
+
+# --project未指定時は自動的に現在のディレクトリが使用される
+cd /path/to/my-project
+uvx worklog-mcp
+```
+
+#### `--project`未指定時の動作
+
+- **自動検出**: 現在の作業ディレクトリ（`os.getcwd()`）が自動的にプロジェクトディレクトリとして使用されます
+- **プロジェクト名生成**: ディレクトリ名からプロジェクト名が自動生成されます
+  - 例: `/home/user/dev/my-awesome-project` → プロジェクト名: `my-awesome-project`
+- **データ分離**: プロジェクト名に基づいてデータが完全に分離されます
+
 ### プロジェクト単位での分報管理
 
 各プロジェクトで独立した分報データを管理できます：
@@ -227,7 +253,7 @@ uvx worklog-mcp --project /path/to/project-a
 # プロジェクトBの分報（完全に分離される）  
 uvx worklog-mcp --project /path/to/project-b
 
-# 現在のディレクトリをプロジェクトとして使用（--project未指定時）
+# 現在のディレクトリをプロジェクトとして使用（推奨）
 cd /path/to/my-project
 uvx worklog-mcp
 ```
