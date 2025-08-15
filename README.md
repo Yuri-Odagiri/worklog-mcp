@@ -234,9 +234,9 @@ uvx worklog-mcp
 
 ### データ分離の仕組み
 
-- **データベース**: `{WORKLOG_BASE_PATH}/{project_name}/database/worklog.db`
+- **データベース**: `{WORKLOG_BASE_PATH}/{project_name}/database.db`
 - **アバター画像**: `{WORKLOG_BASE_PATH}/{project_name}/avatar/{user_id}.png` 
-- **イベントバス**: `{WORKLOG_BASE_PATH}/{project_name}/events/event_bus.db`
+- **イベントバス**: `{WORKLOG_BASE_PATH}/{project_name}/eventbus.db`
 - **プロジェクト名**: `--project`で指定したパス（未指定時は現在のディレクトリ）から自動生成
 
 ## Claude Desktop での設定
@@ -427,10 +427,8 @@ JWTトークンの有効期限設定がうまくいかない"
 ```
 {WORKLOG_BASE_PATH}/             # デフォルト: ~/.worklog
 ├── {project_name}/
-│   ├── database/
-│   │   └── worklog.db          # SQLiteデータベース
-│   ├── events/
-│   │   └── event_bus.db        # イベントバス（プロセス間通信）
+│   ├── database.db             # SQLiteデータベース
+│   ├── eventbus.db             # イベントバス（プロセス間通信）
 │   └── avatar/
 │       ├── {user_id}_gradient.png  # グラデーションアバター（即座表示）
 │       ├── {user_id}_ai.png        # AI生成アバター（バックグラウンド生成）
@@ -439,8 +437,8 @@ JWTトークンの有効期限設定がうまくいかない"
 ```
 
 ### 保存パス
-- **データベース**: `{WORKLOG_BASE_PATH}/{project_name}/database/worklog.db`
-- **イベントバス**: `{WORKLOG_BASE_PATH}/{project_name}/events/event_bus.db`
+- **データベース**: `{WORKLOG_BASE_PATH}/{project_name}/database.db`
+- **イベントバス**: `{WORKLOG_BASE_PATH}/{project_name}/eventbus.db`
 - **アバター画像**: `{WORKLOG_BASE_PATH}/{project_name}/avatar/` ディレクトリ
   - グラデーション: `{user_id}_gradient.png`（登録時即座生成）
   - AI生成: `{user_id}_ai.png`（バックグラウンド生成、自動切り替え）
@@ -450,7 +448,7 @@ JWTトークンの有効期限設定がうまくいかない"
 ```bash
 # カスタムベースパスを指定
 export WORKLOG_BASE_PATH="/custom/path"
-# → /custom/path/{project_name}/database/worklog.db
+# → /custom/path/{project_name}/database.db
 ```
 
 
