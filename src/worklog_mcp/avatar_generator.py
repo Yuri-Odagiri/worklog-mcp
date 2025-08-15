@@ -98,7 +98,7 @@ async def generate_openai_avatar(
         # プロジェクト専用のアバターディレクトリパスを取得
         avatar_dir = Path(project_context.get_avatar_path())
 
-        avatar_path = avatar_dir / f"{user_id}.png"
+        avatar_path = avatar_dir / f"{user_id}_ai.png"
         logger.debug(f"アバター保存先: {avatar_path}")
 
         async with aiofiles.open(avatar_path, "wb") as f:
@@ -180,7 +180,7 @@ async def generate_gradient_avatar(
     # プロジェクト専用のアバターディレクトリパスを取得
     avatar_dir = Path(project_context.get_avatar_path())
 
-    avatar_path = avatar_dir / f"{user_id}.png"
+    avatar_path = avatar_dir / f"{user_id}_gradient.png"
     img.save(avatar_path, "PNG")
 
     return str(avatar_path)
@@ -216,18 +216,31 @@ async def generate_user_avatar_async(
         )
 
         if openai_path:
+            # AI生成が成功した場合のみデータベース更新と通知を実行
             avatar_path = openai_path
-        else:
-            # フォールバック: グラデーション画像を生成
-            avatar_path = await generate_gradient_avatar(
-                theme_color, user_id, project_context
-            )
+            
+            # データベースのアバターパスを更新
+            from .database import Database
 
-        # データベースのアバターパスを更新
-        from .database import Database
+            db = Database(project_context.get_database_path())
+            await db.update_user_avatar_path(user_id, avatar_path)
 
-        db = Database(project_context.get_database_path())
-        await db.update_user_avatar_path(user_id, avatar_path)
+            # Webサーバーに通知（AI生成完了時のみ）
+            # web_serverがインポート可能か確認して通知
+            try:
+                from . import tools
+
+                if hasattr(tools, "web_server") and tools.web_server:
+                    await tools.web_server.notify_clients(
+                        "avatar_updated",
+                        {"user_id": user_id, "avatar_path": avatar_path},
+                    )
+            except Exception as e:
+                # Web通知に失敗してもアバター生成処理は継続
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug(f"アバター更新通知に失敗（処理は継続）: {e}")
 
     except Exception as e:
         # エラーが発生した場合もフォールバックを試行
@@ -237,21 +250,8 @@ async def generate_user_avatar_async(
         logger.error(f"アバター生成処理でエラーが発生: {type(e).__name__}: {e}")
         logger.debug("アバター生成エラー詳細", exc_info=True)
 
-        try:
-            avatar_path = await generate_gradient_avatar(
-                theme_color, user_id, project_context
-            )
-            from .database import Database
-
-            db = Database(project_context.get_database_path())
-            await db.update_user_avatar_path(user_id, avatar_path)
-            logger.info(f"フォールバック処理でアバター生成成功: {avatar_path}")
-        except Exception as fallback_error:
-            # 完全に失敗した場合
-            logger.error(
-                f"フォールバック処理も失敗: {type(fallback_error).__name__}: {fallback_error}"
-            )
-            logger.debug("フォールバック処理エラー詳細", exc_info=True)
+        # エラー発生時はグラデーション画像がそのまま使用される
+        logger.info("AI生成に失敗しましたが、既存のグラデーション画像が使用されます")
 
 
 async def generate_user_avatar(

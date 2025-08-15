@@ -62,6 +62,7 @@ class WebDatabaseAdapter:
                     "created_at": entry.created_at.isoformat(),
                     "updated_at": entry.updated_at.isoformat(),
                     "user_name": user.name if user else entry.user_id,
+                    "user_avatar_path": user.avatar_path if user else None,
                 }
             )
 
@@ -83,6 +84,7 @@ class WebDatabaseAdapter:
                 "role": user.role,
                 "personality": user.personality,
                 "appearance": user.appearance,
+                "avatar_path": user.avatar_path,
                 "created_at": user.created_at.isoformat(),
                 "last_active": user.last_active.isoformat(),
             }
@@ -115,6 +117,7 @@ class WebDatabaseAdapter:
             "created_at": main_entry.created_at.isoformat(),
             "updated_at": main_entry.updated_at.isoformat(),
             "user_name": main_user.name if main_user else main_entry.user_id,
+            "user_avatar_path": main_user.avatar_path if main_user else None,
             "replies": [],
         }
 
@@ -127,6 +130,7 @@ class WebDatabaseAdapter:
                     "markdown_content": reply.markdown_content,
                     "created_at": reply.created_at.isoformat(),
                     "user_name": reply_user.name if reply_user else reply.user_id,
+                    "user_avatar_path": reply_user.avatar_path if reply_user else None,
                 }
             )
 

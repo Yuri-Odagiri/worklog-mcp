@@ -102,6 +102,9 @@ class SimpleWorklogViewer {
                 }
                 this.showNotification(message);
                 break;
+            case 'avatar_updated':
+                this.handleAvatarUpdate(event.data);
+                break;
             case 'ping':
                 // Keep-alive応答（何もしない）
                 break;
@@ -175,10 +178,11 @@ class SimpleWorklogViewer {
         const lightColor = this.getThemeColorStyle(themeColor);
         
         // アバター画像URLを構築
-        const avatarUrl = `/avatar/${entry.user_id}.png`;
+        const avatarUrl = this.getAvatarUrl(entry.user_avatar_path || '', entry.user_id);
         
         div.innerHTML = `
             <img src="${avatarUrl}" alt="${this.escapeHtml(userName)}" class="avatar" 
+                 data-user-id="${entry.user_id}"
                  onerror="this.outerHTML='<div class=\\'avatar error\\'>👤</div>'"
                  style="border-color: ${lightColor.border};">
             <div class="entry-content">
@@ -524,6 +528,52 @@ class SimpleWorklogViewer {
                 }
             };
         });
+    }
+    
+    /**
+     * アバターパスからWebアクセス可能なURLを生成
+     */
+    getAvatarUrl(avatarPath, userId) {
+        if (!avatarPath) {
+            // フォールバック: グラデーション画像を試行
+            return `/avatar/${userId}_gradient.png`;
+        }
+        
+        // ファイル名だけを抽出
+        const fileName = avatarPath.split('/').pop();
+        return `/avatar/${fileName}`;
+    }
+    
+    /**
+     * アバター更新イベントを処理
+     */
+    handleAvatarUpdate(data) {
+        const { user_id, avatar_path } = data;
+        
+        // ユーザー情報を更新
+        if (this.users[user_id]) {
+            this.users[user_id].avatar_path = avatar_path;
+        }
+        
+        // 表示中の全ての該当ユーザーのアバター画像を更新
+        const avatarElements = document.querySelectorAll(`img.avatar[data-user-id="${user_id}"]`);
+        const newAvatarUrl = this.getAvatarUrl(avatar_path, user_id);
+        
+        avatarElements.forEach(img => {
+            // 新しいURLで画像を更新
+            img.src = newAvatarUrl;
+            
+            // 視覚的な更新フィードバック
+            img.style.opacity = '0.5';
+            img.onload = () => {
+                img.style.opacity = '1';
+                img.style.transition = 'opacity 0.3s ease';
+            };
+        });
+        
+        // 通知表示
+        const userName = this.users[user_id]?.name || user_id;
+        this.showNotification(`${userName} のアバターが AI生成版に更新されました`);
     }
 }
 
