@@ -53,6 +53,10 @@ def setup_logging() -> Path:
 
     _setup_done = True
 
+    # aiosqliteのDEBUGログを非表示にする
+    aiosqlite_logger = logging.getLogger("aiosqlite")
+    aiosqlite_logger.setLevel(logging.INFO)
+
     # 初期化完了のログ
     logger = logging.getLogger(__name__)
     logger.info(f"ログ設定初期化完了: {log_file}")
