@@ -171,11 +171,7 @@ class SimpleWorklogViewer {
         const date = new Date(entry.created_at);
         const formattedDate = this.formatDate(date);
         
-        // 返信の場合は特別なスタイル
-        const isReply = entry.related_entry_id;
-        if (isReply) {
-            div.classList.add('thread-reply');
-        }
+        // 返信機能は削除されました
         
         // テーマカラーを淡い色に変換
         const lightColor = this.getThemeColorStyle(themeColor);

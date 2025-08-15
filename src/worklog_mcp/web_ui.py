@@ -7,11 +7,13 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import aiosqlite
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .database import Database
+from .models import WorklogEntry
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,6 @@ class WebDatabaseAdapter:
                     "id": entry.id,
                     "user_id": entry.user_id,
                     "markdown_content": entry.markdown_content,
-                    "related_entry_id": entry.related_entry_id,
                     "created_at": entry.created_at.isoformat(),
                     "user_name": user.name if user else entry.user_id,
                     "user_avatar_path": user.avatar_path if user else None,
@@ -91,48 +92,39 @@ class WebDatabaseAdapter:
         ]
 
     async def get_thread_for_api(self, entry_id: str) -> Optional[Dict[str, Any]]:
-        """Web API用スレッド取得"""
-        thread_entries = await self.db.get_thread(entry_id)
-        if not thread_entries:
+        """Web API用スレッド取得（スレッド機能は削除されたため単一エントリーを返す）"""
+        # 単一エントリーの取得
+        async with aiosqlite.connect(self.db.db_path) as db:
+            cursor = await db.execute(
+                "SELECT id, user_id, markdown_content, created_at FROM entries WHERE id = ?",
+                (entry_id,),
+            )
+            row = await cursor.fetchone()
+
+        if not row:
             return None
 
+        entry = WorklogEntry(
+            id=row[0],
+            user_id=row[1],
+            markdown_content=row[2],
+            created_at=datetime.fromisoformat(row[3])
+            if isinstance(row[3], str)
+            else row[3],
+        )
+
         # ユーザー情報取得
-        user_ids = list(set(entry.user_id for entry in thread_entries))
-        users_dict = {}
-        for user_id in user_ids:
-            user = await self.db.get_user(user_id)
-            if user:
-                users_dict[user_id] = user
+        user = await self.db.get_user(entry.user_id)
 
-        main_entry = thread_entries[0]
-        replies = thread_entries[1:] if len(thread_entries) > 1 else []
-
-        main_user = users_dict.get(main_entry.user_id)
-        result = {
-            "id": main_entry.id,
-            "user_id": main_entry.user_id,
-            "markdown_content": main_entry.markdown_content,
-            "related_entry_id": main_entry.related_entry_id,
-            "created_at": main_entry.created_at.isoformat(),
-            "user_name": main_user.name if main_user else main_entry.user_id,
-            "user_avatar_path": main_user.avatar_path if main_user else None,
-            "replies": [],
+        return {
+            "id": entry.id,
+            "user_id": entry.user_id,
+            "markdown_content": entry.markdown_content,
+            "created_at": entry.created_at.isoformat(),
+            "user_name": user.name if user else entry.user_id,
+            "user_avatar_path": user.avatar_path if user else None,
+            "replies": [],  # スレッド機能は削除されたため空配列
         }
-
-        for reply in replies:
-            reply_user = users_dict.get(reply.user_id)
-            result["replies"].append(
-                {
-                    "id": reply.id,
-                    "user_id": reply.user_id,
-                    "markdown_content": reply.markdown_content,
-                    "created_at": reply.created_at.isoformat(),
-                    "user_name": reply_user.name if reply_user else reply.user_id,
-                    "user_avatar_path": reply_user.avatar_path if reply_user else None,
-                }
-            )
-
-        return result
 
     async def delete_entry_for_api(self, entry_id: str) -> bool:
         """エントリー削除（Web API用）"""
