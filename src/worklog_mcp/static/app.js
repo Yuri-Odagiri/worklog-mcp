@@ -4,6 +4,9 @@ class SimpleWorklogViewer {
         this.users = {};
         this.eventSource = null;
         this.currentSearch = '';
+        this.currentUserSearch = '';
+        this.currentTab = 'worklogs';
+        this.usersData = [];
         this.init();
     }
     
@@ -308,6 +311,13 @@ class SimpleWorklogViewer {
                 this.search();
             }
         });
+        
+        // ユーザー検索欄でEnterキー
+        document.getElementById('user-search').addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                this.searchUsers();
+            }
+        });
     }
     
     search() {
@@ -574,6 +584,224 @@ class SimpleWorklogViewer {
         // 通知表示
         const userName = this.users[user_id]?.name || user_id;
         this.showNotification(`${userName} のアバターが AI生成版に更新されました`);
+    }
+    
+    /**
+     * タブ切り替え機能
+     */
+    switchTab(tabName) {
+        this.currentTab = tabName;
+        
+        // タブボタンのアクティブ状態を更新
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        // タブコンテンツの表示/非表示を更新
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+        
+        // タブに応じてデータを読み込み
+        if (tabName === 'users') {
+            this.renderUsers();
+        } else if (tabName === 'worklogs') {
+            // 分報タブの場合は既に読み込み済み（既存のロジックを使用）
+        }
+    }
+    
+    /**
+     * ユーザー検索機能
+     */
+    searchUsers() {
+        const query = document.getElementById('user-search').value.trim();
+        this.currentUserSearch = query;
+        this.renderUsers();
+    }
+    
+    /**
+     * ユーザーデータの再読み込み
+     */
+    async loadUsers() {
+        if (this.currentTab === 'users') {
+            this.usersData = []; // キャッシュをクリア
+            await this.renderUsers();
+        }
+    }
+    
+    /**
+     * ユーザー一覧表示
+     */
+    async renderUsers() {
+        const container = document.getElementById('users-container');
+        
+        try {
+            // ユーザーデータが未取得の場合は取得
+            if (this.usersData.length === 0) {
+                await this.loadUsersData();
+            }
+            
+            let filteredUsers = this.usersData;
+            
+            // 検索フィルター適用
+            if (this.currentUserSearch) {
+                const query = this.currentUserSearch.toLowerCase();
+                filteredUsers = this.usersData.filter(user => 
+                    user.name.toLowerCase().includes(query) ||
+                    (user.role && user.role.toLowerCase().includes(query))
+                );
+            }
+            
+            if (filteredUsers.length === 0) {
+                container.innerHTML = `
+                    <div class="no-entries">
+                        ${this.currentUserSearch ? 
+                            `「${this.currentUserSearch}」に該当するユーザーが見つかりませんでした。` : 
+                            'ユーザーが登録されていません。'}
+                    </div>
+                `;
+                return;
+            }
+            
+            // ユーザーカードのHTML生成
+            const usersGrid = document.createElement('div');
+            usersGrid.className = 'users-grid';
+            
+            for (const user of filteredUsers) {
+                const userCard = await this.createUserCard(user);
+                usersGrid.appendChild(userCard);
+            }
+            
+            container.innerHTML = '';
+            container.appendChild(usersGrid);
+            
+        } catch (error) {
+            container.innerHTML = `
+                <div class="error">
+                    ❌ ユーザー情報の読み込みに失敗しました: ${this.escapeHtml(error.message)}
+                </div>
+            `;
+        }
+    }
+    
+    /**
+     * ユーザーデータの詳細情報を取得
+     */
+    async loadUsersData() {
+        try {
+            const response = await fetch('/api/users');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            this.usersData = await response.json();
+        } catch (error) {
+            console.error('ユーザーデータ読み込みエラー:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * ユーザーカード要素を作成
+     */
+    async createUserCard(user) {
+        const card = document.createElement('div');
+        card.className = 'user-card';
+        
+        // ユーザーの活動統計を計算
+        const stats = this.calculateUserStats(user.user_id);
+        
+        // テーマカラースタイル取得
+        const themeStyle = this.getThemeColorStyle(user.theme_color);
+        
+        // アバターURL取得
+        const avatarUrl = this.getAvatarUrl(user.avatar_path || '', user.user_id);
+        
+        // 登録日時と最終アクティブ時間をフォーマット
+        const createdDate = new Date(user.created_at);
+        const lastActiveDate = new Date(user.last_active);
+        
+        card.innerHTML = `
+            <div class="user-card-header">
+                <img src="${avatarUrl}" alt="${this.escapeHtml(user.name)}" class="user-card-avatar" 
+                     style="border-color: ${themeStyle.border};"
+                     onerror="this.outerHTML='<div class=\\'user-card-avatar error\\'>👤</div>'">
+                <div class="user-card-info">
+                    <h3 style="color: ${themeStyle.text};">${this.escapeHtml(user.name)}</h3>
+                    ${user.role ? `<div class="user-card-role" style="background-color: ${themeStyle.background}; color: ${themeStyle.text};">${this.escapeHtml(user.role)}</div>` : ''}
+                    <div class="user-card-theme">テーマ: ${user.theme_color}</div>
+                </div>
+            </div>
+            
+            <div class="user-card-details">
+                ${user.personality ? `
+                    <div class="user-detail-section">
+                        <div class="user-detail-label">性格・特徴</div>
+                        <div class="user-detail-content">${this.escapeHtml(user.personality)}</div>
+                    </div>
+                ` : ''}
+                ${user.appearance ? `
+                    <div class="user-detail-section">
+                        <div class="user-detail-label">外見・スタイル</div>
+                        <div class="user-detail-content">${this.escapeHtml(user.appearance)}</div>
+                    </div>
+                ` : ''}
+            </div>
+            
+            <div class="user-card-stats">
+                <div class="user-stat">
+                    <span class="user-stat-value">${stats.totalPosts}</span>
+                    <span class="user-stat-label">総投稿数</span>
+                </div>
+                <div class="user-stat">
+                    <span class="user-stat-value">${stats.todayPosts}</span>
+                    <span class="user-stat-label">今日の投稿</span>
+                </div>
+            </div>
+            
+            <div class="user-activity">
+                <div class="user-activity-item">
+                    <span class="user-activity-label">登録日時</span>
+                    <span class="user-activity-value">${this.formatDate(createdDate)}</span>
+                </div>
+                <div class="user-activity-item">
+                    <span class="user-activity-label">最終アクティブ</span>
+                    <span class="user-activity-value">${this.formatDate(lastActiveDate)}</span>
+                </div>
+                ${stats.lastPostTime ? `
+                    <div class="user-activity-item">
+                        <span class="user-activity-label">最新投稿</span>
+                        <span class="user-activity-value">${this.formatDate(stats.lastPostTime)}</span>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        
+        return card;
+    }
+    
+    /**
+     * ユーザーの活動統計を計算
+     */
+    calculateUserStats(userId) {
+        const userEntries = this.entries.filter(entry => entry.user_id === userId);
+        
+        // 今日の投稿数
+        const today = new Date().toDateString();
+        const todayPosts = userEntries.filter(entry => {
+            const entryDate = new Date(entry.created_at).toDateString();
+            return entryDate === today;
+        }).length;
+        
+        // 最新投稿時間
+        const lastPost = userEntries.length > 0 ? userEntries[0] : null;
+        const lastPostTime = lastPost ? new Date(lastPost.created_at) : null;
+        
+        return {
+            totalPosts: userEntries.length,
+            todayPosts: todayPosts,
+            lastPostTime: lastPostTime
+        };
     }
 }
 

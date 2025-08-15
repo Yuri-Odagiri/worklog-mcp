@@ -12,11 +12,9 @@
     <div class="container">
         <div class="header">
             <h1>📝 分報ビューアー</h1>
-            <div class="search-box">
-                <input type="text" id="search" placeholder="検索キーワードを入力...">
-                <button onclick="app.search()">🔍 検索</button>
-                <button onclick="app.load()">🔄 更新</button>
-                <button onclick="app.confirmTruncateAll()" style="background: #dc3545; margin-left: 20px;">🗑️ 全削除</button>
+            <div class="tab-navigation">
+                <button class="tab-button active" data-tab="worklogs" onclick="app.switchTab('worklogs')">📝 分報</button>
+                <button class="tab-button" data-tab="users" onclick="app.switchTab('users')">👥 ユーザー一覧</button>
             </div>
             <div class="status-row">
                 <div class="status" id="status">接続中...</div>
@@ -24,8 +22,29 @@
             </div>
         </div>
         
-        <div id="entries-container">
-            <div class="loading">データを読み込んでいます...</div>
+        <!-- 分報タブ -->
+        <div id="tab-worklogs" class="tab-content active">
+            <div class="search-box">
+                <input type="text" id="search" placeholder="検索キーワードを入力...">
+                <button onclick="app.search()">🔍 検索</button>
+                <button onclick="app.load()">🔄 更新</button>
+                <button onclick="app.confirmTruncateAll()" style="background: #dc3545; margin-left: 20px;">🗑️ 全削除</button>
+            </div>
+            <div id="entries-container">
+                <div class="loading">データを読み込んでいます...</div>
+            </div>
+        </div>
+        
+        <!-- ユーザー一覧タブ -->
+        <div id="tab-users" class="tab-content">
+            <div class="search-box">
+                <input type="text" id="user-search" placeholder="ユーザー名で検索...">
+                <button onclick="app.searchUsers()">🔍 検索</button>
+                <button onclick="app.loadUsers()">🔄 更新</button>
+            </div>
+            <div id="users-container">
+                <div class="loading">ユーザー情報を読み込んでいます...</div>
+            </div>
         </div>
     </div>
     
