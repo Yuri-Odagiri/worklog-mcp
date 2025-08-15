@@ -51,21 +51,22 @@ def test_worklog_entry_model():
     
     assert entry.user_id == "test-user"
     assert entry.markdown_content == "## 作業\n- テスト実装"
-    assert entry.related_entry_id is None
     assert isinstance(entry.id, str)
     assert isinstance(entry.created_at, datetime)
 
 
-def test_worklog_entry_with_related():
-    """関連エントリー付きWorklogEntryのテスト"""
-    parent_id = generate_id()
+def test_worklog_entry_with_custom_id():
+    """カスタムIDを持つWorklogEntryのテスト"""
+    custom_id = generate_id()
     entry = WorklogEntry(
+        id=custom_id,
         user_id="test-user",
-        markdown_content="返信内容",
-        related_entry_id=parent_id
+        markdown_content="カスタムID付きエントリー"
     )
     
-    assert entry.related_entry_id == parent_id
+    assert entry.id == custom_id
+    assert entry.user_id == "test-user"
+    assert entry.markdown_content == "カスタムID付きエントリー"
 
 
 def test_work_summary_model():
@@ -101,7 +102,6 @@ def test_worklog_entry_default_values():
     
     assert entry.user_id == ""
     assert entry.markdown_content == ""
-    assert entry.related_entry_id is None
     assert isinstance(entry.id, str)
     assert len(entry.id) == 36  # UUID4の長さ
     assert isinstance(entry.created_at, datetime)
