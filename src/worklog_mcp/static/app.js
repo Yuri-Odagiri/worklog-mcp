@@ -33,7 +33,7 @@ class SimpleWorklogViewer {
             const data = await response.json();
             this.entries = data.entries;
             this.currentSearch = search;
-            this.render();
+            await this.render();
             
         } catch (error) {
             this.showError('データ読み込みエラー: ' + error.message);
@@ -66,10 +66,10 @@ class SimpleWorklogViewer {
             this.updateConnectionStatus('connected', '🟢 リアルタイム更新中');
         };
         
-        this.eventSource.onmessage = (event) => {
+        this.eventSource.onmessage = async (event) => {
             try {
                 const data = JSON.parse(event.data);
-                this.handleSSEEvent(data);
+                await this.handleSSEEvent(data);
             } catch (error) {
                 console.error('SSEイベント処理エラー:', error);
             }
@@ -82,7 +82,7 @@ class SimpleWorklogViewer {
         };
     }
     
-    handleSSEEvent(event) {
+    async handleSSEEvent(event) {
         switch (event.type) {
             case 'connected':
                 this.updateConnectionStatus('connected', '🟢 接続完了');
@@ -95,7 +95,7 @@ class SimpleWorklogViewer {
                 break;
             case 'entries_truncated':
                 this.entries = [];
-                this.render();
+                await this.render();
                 let message = `${event.data.deleted_count} 件の分報が削除されました`;
                 if (event.data.users_deleted > 0) {
                     message += `（${event.data.users_deleted} 件のユーザー情報も削除）`;
@@ -114,7 +114,7 @@ class SimpleWorklogViewer {
         }
     }
     
-    addNewEntry(entryData) {
+    async addNewEntry(entryData) {
         // 検索中でない場合のみ新エントリーを追加
         if (!this.currentSearch) {
             this.entries.unshift(entryData);
@@ -122,20 +122,25 @@ class SimpleWorklogViewer {
             if (this.entries.length > 100) {
                 this.entries = this.entries.slice(0, 100);
             }
-            this.render();
+            await this.render();
             this.showNotification('新しい投稿がありました');
         }
     }
     
-    removeEntry(entryId) {
+    async removeEntry(entryId) {
         // エントリーをリストから削除
         this.entries = this.entries.filter(entry => entry.id !== entryId);
-        this.render();
+        await this.render();
         this.showNotification('分報が削除されました');
     }
     
-    render() {
+    async render() {
         const container = document.getElementById('entries-container');
+        
+        // ユーザーデータが空の場合は再読み込み
+        if (Object.keys(this.users).length === 0) {
+            await this.loadUsers();
+        }
         
         // サマリ情報を更新
         this.updateSummary();
@@ -166,7 +171,7 @@ class SimpleWorklogViewer {
         
         const user = this.users[entry.user_id];
         const userName = user ? user.name : entry.user_name || entry.user_id;
-        const userRole = user ? user.role : '';
+        const userRole = user && user.role ? user.role : '';
         const themeColor = user ? user.theme_color : 'Blue';
         const date = new Date(entry.created_at);
         const formattedDate = this.formatDate(date);
@@ -188,7 +193,7 @@ class SimpleWorklogViewer {
                 <div class="entry-header" style="border-bottom-color: ${lightColor.border};">
                     <div>
                         <span class="user-name" style="color: ${lightColor.text};">${this.escapeHtml(userName)}</span>
-                        ${userRole ? `<span class="user-role" style="background-color: ${lightColor.background}; color: ${lightColor.text};">${this.escapeHtml(userRole)}</span>` : ''}
+                        ${userRole ? `<span class="user-card-role" style="background-color: ${lightColor.background}; color: ${lightColor.text}; margin-left: 8px; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">${this.escapeHtml(userRole)}</span>` : ''}
                     </div>
                     <span class="timestamp">${formattedDate}</span>
                 </div>
@@ -475,7 +480,7 @@ class SimpleWorklogViewer {
             
             // UIをクリア
             this.entries = [];
-            this.render();
+            await this.render();
             
             this.showNotification(result.message || '全ての分報を削除しました');
             
@@ -680,9 +685,9 @@ class SimpleWorklogViewer {
     }
     
     /**
-     * ユーザーデータの再読み込み
+     * ユーザーデータの再読み込み（タブ用）
      */
-    async loadUsers() {
+    async refreshUsers() {
         if (this.currentTab === 'users') {
             this.usersData = []; // キャッシュをクリア
             await this.renderUsers();
