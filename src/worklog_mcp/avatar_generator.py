@@ -162,8 +162,8 @@ async def generate_gradient_avatar(
     center = size // 2
     radius = center - 10
 
-    # 外側から内側に向かってグラデーション
-    for i in range(radius, 0, -5):
+    # 外側から内側に向かってグラデーション（最適化：ステップを大きくして描画回数を半減）
+    for i in range(radius, 0, -10):
         # アルファ値と色の明度を調整してグラデーション効果を作成
         alpha = int(255 * (i / radius) * 0.8)  # 外側ほど薄く
         brightness = 0.6 + 0.4 * (i / radius)  # 外側ほど明るく
@@ -181,7 +181,8 @@ async def generate_gradient_avatar(
     avatar_dir = Path(project_context.get_avatar_path())
 
     avatar_path = avatar_dir / f"{user_id}_gradient.png"
-    img.save(avatar_path, "PNG")
+    # PNG保存最適化：圧縮レベルを下げて保存時間を短縮
+    img.save(avatar_path, "PNG", optimize=False, compress_level=1)
 
     return str(avatar_path)
 
@@ -218,7 +219,7 @@ async def generate_user_avatar_async(
         if openai_path:
             # AI生成が成功した場合のみデータベース更新と通知を実行
             avatar_path = openai_path
-            
+
             # データベースのアバターパスを更新
             from .database import Database
 

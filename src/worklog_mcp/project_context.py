@@ -21,6 +21,7 @@ class ProjectContext:
     def __init__(self, project_path: Optional[str] = None):
         self.project_path = project_path
         self.config: Optional[ProjectConfig] = None
+        self._directories_created = False  # ディレクトリ作成済みフラグ
         self._load_config()
 
     def _load_config(self) -> None:
@@ -77,7 +78,11 @@ class ProjectContext:
         # プロジェクト名でディレクトリを分離
         project_dir = Path(base_path) / self.get_project_name()
         database_dir = project_dir / "database"
-        database_dir.mkdir(parents=True, exist_ok=True)
+
+        # 一度だけディレクトリを作成（パフォーマンス最適化）
+        if not self._directories_created:
+            database_dir.mkdir(parents=True, exist_ok=True)
+            # フラグは get_avatar_path でも使用されるため、ここでは設定しない
 
         return str(database_dir / "worklog.db")
 
@@ -90,7 +95,11 @@ class ProjectContext:
         # プロジェクト名でディレクトリを分離
         project_dir = Path(base_path) / self.get_project_name()
         avatar_dir = project_dir / "avatar"
-        avatar_dir.mkdir(parents=True, exist_ok=True)
+
+        # 一度だけディレクトリを作成（パフォーマンス最適化）
+        if not self._directories_created:
+            avatar_dir.mkdir(parents=True, exist_ok=True)
+            self._directories_created = True
 
         return str(avatar_dir)
 
