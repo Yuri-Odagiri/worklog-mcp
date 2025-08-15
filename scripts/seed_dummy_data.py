@@ -307,7 +307,6 @@ async def seed_dummy_data(project_name: str, days: int = 7, entries_per_day: int
                     markdown_content=content,
                     related_entry_id=related_entry_id,
                     created_at=entry_time,
-                    updated_at=entry_time,
                 )
 
                 await db.create_entry(entry)

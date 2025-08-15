@@ -54,7 +54,6 @@ def test_worklog_entry_model():
     assert entry.related_entry_id is None
     assert isinstance(entry.id, str)
     assert isinstance(entry.created_at, datetime)
-    assert isinstance(entry.updated_at, datetime)
 
 
 def test_worklog_entry_with_related():
@@ -106,7 +105,6 @@ def test_worklog_entry_default_values():
     assert isinstance(entry.id, str)
     assert len(entry.id) == 36  # UUID4の長さ
     assert isinstance(entry.created_at, datetime)
-    assert isinstance(entry.updated_at, datetime)
 
 
 def test_work_summary_default_values():

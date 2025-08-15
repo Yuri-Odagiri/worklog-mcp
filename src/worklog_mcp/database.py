@@ -53,11 +53,8 @@ class Database:
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
                 markdown_content TEXT NOT NULL,
-                related_entry_id TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(user_id),
-                FOREIGN KEY (related_entry_id) REFERENCES entries(id)
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         """)
 
@@ -82,9 +79,7 @@ class Database:
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_entries_created_at ON entries(created_at)"
         )
-        await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_entries_related ON entries(related_entry_id)"
-        )
+        # idx_entries_relatedインデックスは削除されました（related_entry_idカラムと一緒に）
 
     async def is_first_run(self) -> bool:
         """初回起動かどうか確認"""
@@ -189,14 +184,12 @@ class Database:
         """エントリー作成"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
-                "INSERT INTO entries (id, user_id, markdown_content, related_entry_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO entries (id, user_id, markdown_content, created_at) VALUES (?, ?, ?, ?)",
                 (
                     entry.id,
                     entry.user_id,
                     entry.markdown_content,
-                    entry.related_entry_id,
                     entry.created_at,
-                    entry.updated_at,
                 ),
             )
             await db.commit()
@@ -208,7 +201,7 @@ class Database:
         """エントリー取得"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "SELECT id, user_id, markdown_content, related_entry_id, created_at, updated_at FROM entries WHERE id = ?",
+                "SELECT id, user_id, markdown_content, created_at FROM entries WHERE id = ?",
                 (entry_id,),
             )
             row = await cursor.fetchone()
@@ -217,13 +210,9 @@ class Database:
                     id=row[0],
                     user_id=row[1],
                     markdown_content=row[2],
-                    related_entry_id=row[3],
-                    created_at=datetime.fromisoformat(row[4])
-                    if isinstance(row[4], str)
-                    else row[4],
-                    updated_at=datetime.fromisoformat(row[5])
-                    if isinstance(row[5], str)
-                    else row[5],
+                    created_at=datetime.fromisoformat(row[3])
+                    if isinstance(row[3], str)
+                    else row[3],
                 )
             return None
 
@@ -231,8 +220,8 @@ class Database:
         """エントリー更新"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "UPDATE entries SET markdown_content = ?, updated_at = ? WHERE id = ?",
-                (markdown_content, datetime.now(), entry_id),
+                "UPDATE entries SET markdown_content = ? WHERE id = ?",
+                (markdown_content, entry_id),
             )
             await db.commit()
             return cursor.rowcount > 0
@@ -319,7 +308,7 @@ class Database:
         count: Optional[int] = None,
     ) -> List[WorklogEntry]:
         """タイムライン取得"""
-        query = "SELECT id, user_id, markdown_content, related_entry_id, created_at, updated_at FROM entries"
+        query = "SELECT id, user_id, markdown_content, created_at FROM entries"
         params = []
         conditions = []
 
@@ -349,13 +338,9 @@ class Database:
                     id=row[0],
                     user_id=row[1],
                     markdown_content=row[2],
-                    related_entry_id=row[3],
-                    created_at=datetime.fromisoformat(row[4])
-                    if isinstance(row[4], str)
-                    else row[4],
-                    updated_at=datetime.fromisoformat(row[5])
-                    if isinstance(row[5], str)
-                    else row[5],
+                    created_at=datetime.fromisoformat(row[3])
+                    if isinstance(row[3], str)
+                    else row[3],
                 )
                 for row in rows
             ]
@@ -368,7 +353,7 @@ class Database:
         date_to: Optional[datetime] = None,
     ) -> List[WorklogEntry]:
         """エントリー検索"""
-        query = "SELECT id, user_id, markdown_content, related_entry_id, created_at, updated_at FROM entries WHERE markdown_content LIKE ?"
+        query = "SELECT id, user_id, markdown_content, created_at FROM entries WHERE markdown_content LIKE ?"
         params = [f"%{keyword}%"]
 
         if user_id:
@@ -393,50 +378,14 @@ class Database:
                     id=row[0],
                     user_id=row[1],
                     markdown_content=row[2],
-                    related_entry_id=row[3],
-                    created_at=datetime.fromisoformat(row[4])
-                    if isinstance(row[4], str)
-                    else row[4],
-                    updated_at=datetime.fromisoformat(row[5])
-                    if isinstance(row[5], str)
-                    else row[5],
+                    created_at=datetime.fromisoformat(row[3])
+                    if isinstance(row[3], str)
+                    else row[3],
                 )
                 for row in rows
             ]
 
-    async def get_thread(self, entry_id: str) -> List[WorklogEntry]:
-        """スレッド取得（関連エントリー含む）"""
-        entries = []
-
-        # 元エントリーを取得
-        main_entry = await self.get_entry(entry_id)
-        if main_entry:
-            entries.append(main_entry)
-
-        # 関連エントリーを取得
-        async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                "SELECT id, user_id, markdown_content, related_entry_id, created_at, updated_at FROM entries WHERE related_entry_id = ? ORDER BY created_at ASC",
-                (entry_id,),
-            )
-            rows = await cursor.fetchall()
-            for row in rows:
-                entries.append(
-                    WorklogEntry(
-                        id=row[0],
-                        user_id=row[1],
-                        markdown_content=row[2],
-                        related_entry_id=row[3],
-                        created_at=datetime.fromisoformat(row[4])
-                        if isinstance(row[4], str)
-                        else row[4],
-                        updated_at=datetime.fromisoformat(row[5])
-                        if isinstance(row[5], str)
-                        else row[5],
-                    )
-                )
-
-        return entries
+    # get_thread機能は削除されました（related_entry_id機能と一緒に）
 
     async def get_user_stats(self, user_id: str) -> Dict[str, Any]:
         """ユーザー統計情報取得"""

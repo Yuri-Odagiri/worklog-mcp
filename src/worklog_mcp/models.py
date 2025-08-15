@@ -61,9 +61,7 @@ class WorklogEntry:
     id: str = field(default_factory=generate_id)
     user_id: str = ""
     markdown_content: str = ""
-    related_entry_id: Optional[str] = None
     created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
 
 
 @dataclass

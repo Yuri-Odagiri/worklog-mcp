@@ -263,19 +263,16 @@ def register_tools(
             await notify_web(
                 "entry_created",
                 {
-                    "id": entry.id,
                     "user_id": entry.user_id,
                     "user_name": user.name,
                     "markdown_content": entry.markdown_content,
                     "created_at": entry.created_at.isoformat(),
-                    "updated_at": entry.updated_at.isoformat(),
-                    "related_entry_id": entry.related_entry_id,
                     "is_reply": False,
                 },
             )
 
-            await ctx.info(f"分報が投稿されました (ID: {entry.id})")
-            return f"分報を投稿しました (ID: {entry.id})"
+            await ctx.info("分報が投稿されました")
+            return "分報を投稿しました"
 
         except ValueError as e:
             await ctx.error(f"エラー: {str(e)}")
@@ -284,65 +281,7 @@ def register_tools(
             await ctx.error(f"予期しないエラー: {str(e)}")
             raise
 
-    @mcp.tool(
-        name="reply_worklog",
-        description="既存の分報に返信または続報を投稿します。元の分報に関連する追加情報や返信を投稿する際に使用します。",
-    )
-    @log_mcp_tool
-    async def reply_to_entry(
-        user_id: str, related_entry_id: str, markdown_content: str, ctx: Context
-    ) -> str:
-        """既存の分報に返信・続報を投稿する"""
-        try:
-            # ユーザー存在確認
-            user = await db.get_user(user_id)
-            if not user:
-                raise ValueError(f"ユーザーID '{user_id}' が見つかりません")
-
-            # バリデーション
-            if not related_entry_id or not markdown_content.strip():
-                raise ValueError("関連エントリーIDと返信内容は必須です")
-
-            # 関連エントリーの存在確認
-            related_entry = await db.get_entry(related_entry_id)
-            if not related_entry:
-                raise ValueError(f"エントリーID '{related_entry_id}' が見つかりません")
-
-            await ctx.info(f"エントリー '{related_entry_id}' に返信中...")
-
-            # 返信エントリー作成
-            entry = WorklogEntry(
-                user_id=user_id,
-                markdown_content=markdown_content.strip(),
-                related_entry_id=related_entry_id,
-            )
-
-            await db.create_entry(entry)
-
-            # イベントバス経由でWeb側に通知
-            await notify_web(
-                "entry_created",
-                {
-                    "id": entry.id,
-                    "user_id": entry.user_id,
-                    "user_name": user.name,
-                    "markdown_content": entry.markdown_content,
-                    "created_at": entry.created_at.isoformat(),
-                    "updated_at": entry.updated_at.isoformat(),
-                    "related_entry_id": entry.related_entry_id,
-                    "is_reply": True,
-                },
-            )
-
-            await ctx.info(f"返信が投稿されました (ID: {entry.id})")
-            return f"エントリー '{related_entry_id}' に返信しました (ID: {entry.id})"
-
-        except ValueError as e:
-            await ctx.error(f"エラー: {str(e)}")
-            raise
-        except Exception as e:
-            await ctx.error(f"予期しないエラー: {str(e)}")
-            raise
+    # reply_worklog機能は削除されました
 
     @mcp.tool(
         name="read_timeline",
@@ -385,13 +324,10 @@ def register_tools(
 
                 result.append(
                     {
-                        "id": entry.id,
                         "user_id": entry.user_id,
                         "user_name": user_name,
                         "markdown_content": entry.markdown_content,
-                        "related_entry_id": entry.related_entry_id,
                         "created_at": entry.created_at.isoformat(),
-                        "updated_at": entry.updated_at.isoformat(),
                     }
                 )
 
@@ -440,13 +376,10 @@ def register_tools(
             for entry in entries:
                 result.append(
                     {
-                        "id": entry.id,
                         "user_id": entry.user_id,
                         "user_name": target_user.name,
                         "markdown_content": entry.markdown_content,
-                        "related_entry_id": entry.related_entry_id,
                         "created_at": entry.created_at.isoformat(),
-                        "updated_at": entry.updated_at.isoformat(),
                     }
                 )
 
@@ -517,13 +450,10 @@ def register_tools(
 
                 result.append(
                     {
-                        "id": entry.id,
                         "user_id": entry.user_id,
                         "user_name": user_name,
                         "markdown_content": entry.markdown_content,
-                        "related_entry_id": entry.related_entry_id,
                         "created_at": entry.created_at.isoformat(),
-                        "updated_at": entry.updated_at.isoformat(),
                     }
                 )
 
@@ -537,60 +467,7 @@ def register_tools(
             await ctx.error(f"予期しないエラー: {str(e)}")
             raise
 
-    @mcp.tool(
-        name="read_worklog_thread",
-        description="特定の分報とそれに関連する返信・続報をスレッド形式で取得します。会話の流れを把握したい場合に使用します。",
-    )
-    @log_mcp_tool
-    async def get_thread(
-        user_id: str, entry_id: str, ctx: Context
-    ) -> List[Dict[str, Any]]:
-        """特定エントリーのスレッド表示（関連する返信を含む）"""
-        try:
-            # 呼び出し元ユーザー存在確認
-            caller_user = await db.get_user(user_id)
-            if not caller_user:
-                raise ValueError(f"ユーザーID '{user_id}' が見つかりません")
-
-            if not entry_id:
-                raise ValueError("entry_idは必須です")
-
-            await ctx.info(f"エントリー '{entry_id}' のスレッドを取得中...")
-
-            # スレッド取得
-            entries = await db.get_thread(entry_id)
-
-            if not entries:
-                raise ValueError(f"エントリーID '{entry_id}' が見つかりません")
-
-            # 結果を変換
-            result = []
-            for entry in entries:
-                # ユーザー情報を取得
-                user = await db.get_user(entry.user_id)
-                user_name = user.name if user else "Unknown"
-
-                result.append(
-                    {
-                        "id": entry.id,
-                        "user_id": entry.user_id,
-                        "user_name": user_name,
-                        "markdown_content": entry.markdown_content,
-                        "related_entry_id": entry.related_entry_id,
-                        "created_at": entry.created_at.isoformat(),
-                        "updated_at": entry.updated_at.isoformat(),
-                    }
-                )
-
-            await ctx.info(f"スレッド取得完了: {len(result)}件")
-            return result
-
-        except ValueError as e:
-            await ctx.error(f"エラー: {str(e)}")
-            raise
-        except Exception as e:
-            await ctx.error(f"予期しないエラー: {str(e)}")
-            raise
+    # read_worklog_thread機能は削除されました（related_entry_id機能と一緒に）
 
     @mcp.tool(
         name="list_users",
@@ -668,7 +545,6 @@ def register_tools(
 
                 if latest_entry:
                     member_info["latest_entry"] = {
-                        "id": latest_entry.id,
                         "content_preview": latest_entry.markdown_content[:100] + "..."
                         if len(latest_entry.markdown_content) > 100
                         else latest_entry.markdown_content,

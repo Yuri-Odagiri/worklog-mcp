@@ -60,7 +60,6 @@ class WebDatabaseAdapter:
                     "markdown_content": entry.markdown_content,
                     "related_entry_id": entry.related_entry_id,
                     "created_at": entry.created_at.isoformat(),
-                    "updated_at": entry.updated_at.isoformat(),
                     "user_name": user.name if user else entry.user_id,
                     "user_avatar_path": user.avatar_path if user else None,
                 }
@@ -115,7 +114,6 @@ class WebDatabaseAdapter:
             "markdown_content": main_entry.markdown_content,
             "related_entry_id": main_entry.related_entry_id,
             "created_at": main_entry.created_at.isoformat(),
-            "updated_at": main_entry.updated_at.isoformat(),
             "user_name": main_user.name if main_user else main_entry.user_id,
             "user_avatar_path": main_user.avatar_path if main_user else None,
             "replies": [],

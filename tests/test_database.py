@@ -156,44 +156,7 @@ async def test_entry_update(db):
     assert updated_entry.markdown_content == "更新された内容"
 
 
-@pytest.mark.asyncio
-async def test_thread_functionality(db):
-    """スレッド機能のテスト"""
-    # ユーザー作成
-    user = User(user_id="test-user", name="テストユーザー", role="開発者")
-    await db.create_user(user)
-    
-    # メインエントリー作成
-    main_entry = WorklogEntry(
-        user_id="test-user",
-        markdown_content="メインエントリー"
-    )
-    await db.create_entry(main_entry)
-    
-    # 返信エントリー作成
-    reply1 = WorklogEntry(
-        user_id="test-user",
-        markdown_content="返信1",
-        related_entry_id=main_entry.id
-    )
-    await db.create_entry(reply1)
-    
-    reply2 = WorklogEntry(
-        user_id="test-user",
-        markdown_content="返信2",
-        related_entry_id=main_entry.id
-    )
-    await db.create_entry(reply2)
-    
-    # スレッド取得
-    thread = await db.get_thread(main_entry.id)
-    assert len(thread) == 3  # メイン + 返信2件
-    
-    # 順序確認（メインが最初、返信は時系列順）
-    assert thread[0].id == main_entry.id
-    assert thread[0].related_entry_id is None
-    assert thread[1].related_entry_id == main_entry.id
-    assert thread[2].related_entry_id == main_entry.id
+# test_thread_functionalityは削除されました（related_entry_id機能と一緒に）
 
 
 @pytest.mark.asyncio
