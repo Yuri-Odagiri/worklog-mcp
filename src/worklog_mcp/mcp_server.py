@@ -59,7 +59,7 @@ async def run_mcp_server(project_path: str) -> None:
             )
 
         # イベントバスの初期化
-        event_bus_path = project_context.get_event_bus_path()
+        event_bus_path = project_context.get_eventbus_database_path()
         event_bus = EventBus(event_bus_path)
         await event_bus.initialize()
 

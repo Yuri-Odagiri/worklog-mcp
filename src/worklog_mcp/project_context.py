@@ -60,6 +60,14 @@ class ProjectContext:
         """プロジェクト名を取得"""
         return self.config.project_name if self.config else "default"
 
+    def _get_base_path(self) -> str:
+        """ワークログのベースパスを取得"""
+        return os.environ.get("WORKLOG_BASE_PATH", os.path.expanduser("~/.worklog"))
+
+    def _get_project_dir(self) -> Path:
+        """プロジェクト専用ディレクトリのパスを取得"""
+        return Path(self._get_base_path()) / self.get_project_name()
+
     def get_project_description(self) -> str:
         """プロジェクト説明を取得"""
         return self.config.description if self.config else ""
@@ -71,44 +79,28 @@ class ProjectContext:
 
     def get_database_path(self) -> str:
         """プロジェクト専用のデータベースパスを取得"""
-        base_path = os.environ.get(
-            "WORKLOG_BASE_PATH", os.path.expanduser("~/.worklog")
-        )
-
-        # プロジェクト名でディレクトリを分離
-        project_dir = Path(base_path) / self.get_project_name()
-        database_dir = project_dir / "database"
+        project_dir = self._get_project_dir()
 
         # 一度だけディレクトリを作成（パフォーマンス最適化）
         if not self._directories_created:
-            database_dir.mkdir(parents=True, exist_ok=True)
+            project_dir.mkdir(parents=True, exist_ok=True)
             # フラグは get_avatar_path でも使用されるため、ここでは設定しない
 
-        return str(database_dir / "worklog.db")
+        return str(project_dir / "database.db")
 
-    def get_event_bus_path(self) -> Path:
-        """プロジェクト専用のイベントバスパスを取得"""
-        base_path = os.environ.get(
-            "WORKLOG_BASE_PATH", os.path.expanduser("~/.worklog")
-        )
+    def get_eventbus_database_path(self) -> str:
+        """プロジェクト専用のイベントバスデータベースパスを取得"""
+        project_dir = self._get_project_dir()
 
-        # プロジェクト名でディレクトリを分離
-        project_dir = Path(base_path) / self.get_project_name()
-        event_bus_dir = project_dir / "events"
+        # 一度だけディレクトリを作成（パフォーマンス最適化）
+        if not self._directories_created:
+            project_dir.mkdir(parents=True, exist_ok=True)
 
-        # ディレクトリ作成
-        event_bus_dir.mkdir(parents=True, exist_ok=True)
-
-        return event_bus_dir / "event_bus.db"
+        return str(project_dir / "eventbus.db")
 
     def get_avatar_path(self) -> str:
         """プロジェクト専用のアバターディレクトリパスを取得"""
-        base_path = os.environ.get(
-            "WORKLOG_BASE_PATH", os.path.expanduser("~/.worklog")
-        )
-
-        # プロジェクト名でディレクトリを分離
-        project_dir = Path(base_path) / self.get_project_name()
+        project_dir = self._get_project_dir()
         avatar_dir = project_dir / "avatar"
 
         # 一度だけディレクトリを作成（パフォーマンス最適化）
@@ -117,6 +109,11 @@ class ProjectContext:
             self._directories_created = True
 
         return str(avatar_dir)
+
+    def get_user_avatar_path(self, user_id: str) -> str:
+        """特定ユーザーのアバター画像パスを取得"""
+        avatar_dir = self.get_avatar_path()
+        return str(Path(avatar_dir) / f"{user_id}.png")
 
     def initialize_project_directories(self) -> None:
         """プロジェクトの全ディレクトリを初期化"""
