@@ -221,19 +221,18 @@ uv run python -m worklog_mcp --project . --web-port 8080
 分報MCPサーバーは`--project`オプションでプロジェクトディレクトリを指定できます：
 
 ```bash
-# 明示的にプロジェクトディレクトリを指定
+# 明示的にプロジェクトディレクトリを指定（絶対パス推奨）
 uvx worklog-mcp --project /path/to/project-a
-
-# 相対パスでの指定
-uvx worklog-mcp --project ./my-project
 
 # カレントディレクトリを指定
 uvx worklog-mcp --project .
 
-# --project未指定時は自動的に現在のディレクトリが使用される
+# --project未指定時は自動的に現在のディレクトリが使用される（推奨）
 cd /path/to/my-project
 uvx worklog-mcp
 ```
+
+**注意**: 相対パス指定（`./my-project` 等）は、実行時のカレントディレクトリに依存するため推奨されません。絶対パスまたは`--project`未指定での実行を推奨します。
 
 #### `--project`未指定時の動作
 
