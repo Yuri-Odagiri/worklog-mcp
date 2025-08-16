@@ -25,6 +25,7 @@ dependencies = [
 
 [project.scripts]
 worklog-mcp = "worklog_mcp.__main__:main"
+worklog-mcp-server = "worklog_mcp.mcp_server:main"
 
 [tool.uv]
 dev-dependencies = [
