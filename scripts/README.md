@@ -16,6 +16,10 @@
 - **`stop-mcp.sh`** - MCPサーバーのみ停止
 - **`stop-web.sh`** - Webビューアーのみ停止
 
+### 📊 状態確認スクリプト
+
+- **`status.sh`** - プロセス状態・リソース使用量・エンドポイント接続確認
+
 ## 🔧 使用方法
 
 ### 基本的な使用方法
@@ -26,6 +30,9 @@ cd /mnt/c/Users/ixixi/dev/worklog-mcp
 
 # 統合サーバー起動（推奨）
 ./scripts/start-all.sh /path/to/your/project
+
+# 状態確認
+./scripts/status.sh
 
 # 全停止
 ./scripts/stop-all.sh
@@ -90,13 +97,26 @@ tail -f /tmp/worklog-mcp-server.log /tmp/worklog-web-viewer.log
 ## 🔍 プロセス確認
 
 ```bash
-# worklog-mcpプロセスの確認
+# 詳細な状態確認（推奨）
+./scripts/status.sh
+
+# 手動でのプロセス確認
 ps aux | grep worklog_mcp | grep -v grep
 
 # ポート使用状況確認
 lsof -i :8001  # MCPサーバー
 lsof -i :8080  # Webビューアー
 ```
+
+### 📊 status.sh が提供する情報
+
+- **プロセス状態**: PID、CPU/メモリ使用量、起動時間
+- **エンドポイント確認**: MCP/Web接続テスト
+- **プロジェクト情報**: 使用中のプロジェクトパス
+- **リソース状況**: 総使用量とポート状態  
+- **ログファイル**: サイズと更新時刻
+- **データベース**: worklog.db、eventbus.db、アバター状況
+- **管理コマンド**: 起動・停止・確認方法
 
 ## ⚠️ トラブルシューティング
 
@@ -138,11 +158,14 @@ uv sync
 
 ```bash
 # 開発開始
-./scripts/start-all.sh
+./scripts/start-all.sh /path/to/your/project
+
+# 状態確認
+./scripts/status.sh
 
 # 設定変更後の再起動
 ./scripts/stop-all.sh
-./scripts/start-all.sh
+./scripts/start-all.sh /path/to/your/project
 
 # 開発終了
 ./scripts/stop-all.sh
@@ -152,7 +175,10 @@ uv sync
 
 ```bash
 # Claude Code接続用
-./scripts/start-mcp.sh
+./scripts/start-mcp.sh /path/to/your/project
+
+# 状態確認
+./scripts/status.sh
 
 # 停止
 ./scripts/stop-mcp.sh
@@ -162,7 +188,10 @@ uv sync
 
 ```bash
 # Webビューアーのみ起動（MCPサーバーは別途起動済みの場合）
-./scripts/start-web.sh
+./scripts/start-web.sh /path/to/your/project
+
+# 状態確認
+./scripts/status.sh
 
 # 停止
 ./scripts/stop-web.sh
