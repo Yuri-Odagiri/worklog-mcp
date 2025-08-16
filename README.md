@@ -46,29 +46,46 @@ cd worklog-mcp
 # 依存関係のインストール
 uv sync
 
-# === 統合起動（推奨） ===
+# === worklog-ctl統合管理コマンド（推奨） ===
 
-# 4サービス統合起動（MCP・Web・Agent MCP・ジョブワーカー）
-./scripts/start-all.sh .
-
-# === 個別起動 ===
-
-# 1. MCPサーバーのみ
-uv run python -m worklog_mcp.mcp_server --project .
-
-# 2. Webビューアーのみ
-uv run python -m worklog_mcp.web_server --project . --port 8080
-
-# 3. Agent MCPサーバーのみ
-uv run python -m worklog_agent_mcp --project . --transport http --port 8002
-
-# === 管理コマンド ===
+# 全サービス起動（MCP・Web・Agent MCP・ジョブワーカー）
+./worklog-ctl start all .
 
 # 状態確認
-./scripts/status.sh
+./worklog-ctl status
 
 # 全停止
-./scripts/stop-all.sh
+./worklog-ctl stop all
+
+# === 個別サービス管理 ===
+
+# MCPサーバーのみ起動
+./worklog-ctl start mcp .
+
+# Webビューアーのみ起動
+./worklog-ctl start web --web-port 8080 .
+
+# Agent MCPサーバーのみ起動  
+./worklog-ctl start agent --agent-port 8002 .
+
+# ジョブワーカーのみ起動
+./worklog-ctl start job .
+
+# 個別停止
+./worklog-ctl stop mcp
+./worklog-ctl stop web
+./worklog-ctl stop agent
+./worklog-ctl stop job
+
+# === ログ確認 ===
+
+# 全ログ確認
+./worklog-ctl logs all
+
+# 個別ログ確認（リアルタイム監視）
+./worklog-ctl logs mcp --follow
+./worklog-ctl logs web --follow
+
 ```
 
 ### 方法2: uvxでの実行（配布用）
@@ -157,6 +174,26 @@ export WORKLOG_BASE_PATH="/custom/path"
 {
   "mcpServers": {
     "worklog-project": {
+      "type": "http",
+      "url": "http://127.0.0.1:8001/mcp",
+      "command": "./worklog-ctl",
+      "args": ["start", "mcp", "--claude", "/path/to/project"],
+      "cwd": "/absolute/path/to/worklog-mcp",
+      "env": {
+        "WORKLOG_BASE_PATH": "~/.worklog",
+        "OPENAI_API_KEY": "your-openai-api-key-here"
+      }
+    }
+  }
+}
+```
+
+**従来方法（互換性のため残存）:**
+
+```json
+{
+  "mcpServers": {
+    "worklog-project-legacy": {
       "command": "uv",
       "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project"],
       "cwd": "/absolute/path/to/worklog-mcp",
@@ -215,25 +252,6 @@ MCPサーバー → イベントバス → Webビューアー → ブラウザ
   - `Ctrl+R` / `Cmd+R`: 更新
   - `Ctrl+F` / `Cmd+F`: 検索欄にフォーカス
 
-#### 起動例
-
-```bash
-# === 統合起動（推奨） ===
-
-# 4サービス統合起動
-./scripts/start-all.sh .
-
-# === 個別起動 ===
-
-# MCPサーバーのみ（バックグラウンド）
-uv run python -m worklog_mcp.mcp_server --project . &
-
-# Webビューアーのみ
-uv run python -m worklog_mcp.web_server --project . --port 8080
-
-# Agent MCPサーバーのみ
-./scripts/start-agent-mcp.sh .
-```
 
 ## プロジェクト分離機能
 
@@ -303,18 +321,18 @@ Agent MCPは、Claude Code Agent管理を専門とする完全独立MCPサーバ
 # === 個別起動 ===
 
 # Agent MCPサーバーのみ起動
-./scripts/start-agent-mcp.sh .
+./worklog-ctl start agent .
 
 # 状態確認
-./scripts/status-agent-mcp.sh
+./worklog-ctl status agent
 
 # 停止
-./scripts/stop-agent-mcp.sh
+./worklog-ctl stop agent
 
 # === 統合起動（推奨） ===
 
 # 4サービス統合起動（分報MCP + Agent MCP + Web + ジョブワーカー）
-./scripts/start-all.sh .
+./worklog-ctl start all .
 ```
 
 ### Agent MCP設定
@@ -340,17 +358,27 @@ Claude DesktopでMCPサーバーとして利用する場合：
 #### 方法1: Claude Code (推奨)
 
 ```bash
+# === worklog-ctl使用（推奨） ===
+
 # 分報MCPサーバー（stdio）
-claude mcp add worklog-stdio -- uv run python -m worklog_mcp.mcp_server --project . --transport stdio
+claude mcp add worklog-stdio -- ./worklog-ctl start mcp --transport stdio .
 
 # 分報MCPサーバー（Streamable HTTP）
-claude mcp add --transport http worklog http://127.0.0.1:8001/mcp --command "uv run python -m worklog_mcp.mcp_server --project . --transport http"
+claude mcp add --transport http worklog http://127.0.0.1:8001/mcp --command "./worklog-ctl start mcp --claude ."
 
 # Agent MCPサーバー（リモートMCP）
-claude mcp add --transport http worklog-agent http://127.0.0.1:8002/mcp
+claude mcp add --transport http worklog-agent http://127.0.0.1:8002/mcp --command "./worklog-ctl start agent ."
+
+# === 従来コマンド（互換性のため残存） ===
+
+# 分報MCPサーバー（stdio）
+claude mcp add worklog-stdio-legacy -- uv run python -m worklog_mcp.mcp_server --project . --transport stdio
+
+# 分報MCPサーバー（Streamable HTTP）
+claude mcp add --transport http worklog-legacy http://127.0.0.1:8001/mcp --command "uv run python -m worklog_mcp.mcp_server --project . --transport http"
 
 # Gitリポジトリから直接追加（統合サーバー）
-claude mcp add --transport http worklog http://127.0.0.1:8001/mcp --command "uvx --from git+https://github.com/Yuri-Odagiri/worklog-mcp.git worklog-mcp"
+claude mcp add --transport http worklog-git http://127.0.0.1:8001/mcp --command "uvx --from git+https://github.com/Yuri-Odagiri/worklog-mcp.git worklog-mcp"
 ```
 
 #### 方法2: 手動設定（開発モード）
@@ -362,11 +390,40 @@ claude mcp add --transport http worklog http://127.0.0.1:8001/mcp --command "uvx
   "mcpServers": {
     "worklog-stdio": {
       "type": "stdio",
+      "command": "./worklog-ctl",
+      "args": ["start", "mcp", "--transport", "stdio", "/path/to/project"],
+      "cwd": "/absolute/path/to/worklog-mcp"
+    },
+    "worklog-http": {
+      "type": "http",
+      "url": "http://127.0.0.1:8001/mcp",
+      "command": "./worklog-ctl",
+      "args": ["start", "mcp", "--claude", "/path/to/project"],
+      "cwd": "/absolute/path/to/worklog-mcp"
+    },
+    "worklog-agent": {
+      "type": "http",
+      "url": "http://127.0.0.1:8002/mcp",
+      "command": "./worklog-ctl",
+      "args": ["start", "agent", "/path/to/project"],
+      "cwd": "/absolute/path/to/worklog-mcp"
+    }
+  }
+}
+```
+
+**従来コマンド（互換性のため残存）:**
+
+```json
+{
+  "mcpServers": {
+    "worklog-stdio-legacy": {
+      "type": "stdio",
       "command": "uv",
       "args": ["run", "python", "-m", "worklog_mcp.mcp_server", "--project", "/path/to/project", "--transport", "stdio"],
       "cwd": "/absolute/path/to/worklog-mcp"
     },
-    "worklog-http": {
+    "worklog-http-legacy": {
       "type": "http",
       "url": "http://127.0.0.1:8001/mcp",
       "command": "uv",
@@ -378,10 +435,10 @@ claude mcp add --transport http worklog http://127.0.0.1:8001/mcp --command "uvx
 ```
 
 **注意**: 
-- **stdio**: MCPサーバーのみ (`worklog_mcp.mcp_server`)
-- **http**: 統合サーバー (MCPサーバー + Webビューアー) (`worklog_mcp`)
+- **worklog-ctl推奨**: 統合管理コマンドによる効率的なサービス制御
+- **--claude**: Claude Code用の専用起動モード（既存プロセス使い回し）
 - `cwd`は`worklog-mcp`プロジェクトディレクトリの絶対パス
-- `--project`引数でプロジェクトディレクトリを指定
+- `./worklog-ctl`はプロジェクトディレクトリの実行ファイル
 - デフォルトトランスポート: `http` (Streamable HTTP)
 
 ### Webビューアーの起動
@@ -389,11 +446,21 @@ claude mcp add --transport http worklog http://127.0.0.1:8001/mcp --command "uvx
 Claude Desktop設定とは別に、Webビューアーを起動：
 
 ```bash
-# === Webビューアーのみ起動 ===
+# === worklog-ctl使用（推奨） ===
+
+# Webビューアーのみ起動
 cd /path/to/project-a
+./worklog-ctl start web --web-port 8080 .
+
+# 統合起動（MCPサーバー + Webビューアー + Agent MCP + ジョブワーカー）
+./worklog-ctl start all --web-port 8080 .
+
+# === 従来コマンド（互換性のため残存） ===
+
+# Webビューアーのみ起動
 uv run python -m worklog_mcp.web_server --project . --port 8080
 
-# === 統合起動（MCPサーバー + Webビューアー） ===
+# 統合起動（MCPサーバー + Webビューアー）
 uv run python -m worklog_mcp --project . --web-port 8080
 
 # ブラウザでアクセス
@@ -407,12 +474,28 @@ open http://localhost:8080
 
 ### 方法3: ローカルパッケージでの実行
 
-ローカルでビルドしたパッケージを使用する場合：
+ローカルでビルドしたパッケージを使用する場合は、開発モードでworklog-ctlを使用することを推奨します：
 
 ```json
 {
   "mcpServers": {
     "worklog-http": {
+      "type": "http",
+      "url": "http://127.0.0.1:8001/mcp",
+      "command": "./worklog-ctl",
+      "args": ["start", "mcp", "--claude", "/path/to/project"],
+      "cwd": "/absolute/path/to/worklog-mcp"
+    }
+  }
+}
+```
+
+**従来方法（パッケージ直接実行）:**
+
+```json
+{
+  "mcpServers": {
+    "worklog-http-package": {
       "type": "http",
       "url": "http://127.0.0.1:8001/mcp",
       "command": "uvx",
@@ -590,34 +673,87 @@ read_timeline "my-user-id" target_user_id="other-user-id"
 
 ## 開発・テスト
 
-### 統合管理スクリプト 🆕
+### worklog-ctl統合管理コマンド 🆕
 
 4サービス（MCP・Web・Agent MCP・ジョブワーカー）の統合管理：
 
 ```bash
-# === 統合管理 ===
+# === worklog-ctl統合管理（推奨） ===
 
-# 4サービス統合起動
-./scripts/start-all.sh /path/to/project [webポート] [agentポート]
+# 全サービス起動
+./worklog-ctl start all /path/to/project
 
-# 全サービス状態確認（エンドポイントテスト付き）
-./scripts/status.sh
+# 個別サービス起動
+./worklog-ctl start mcp /path/to/project
+./worklog-ctl start web --web-port 8081 /path/to/project
+./worklog-ctl start agent --agent-port 8003 /path/to/project
+./worklog-ctl start job /path/to/project
 
-# 全サービス停止
-./scripts/stop-all.sh
+# 状態確認（エンドポイントテスト付き）
+./worklog-ctl status
+./worklog-ctl status mcp
+./worklog-ctl status all
 
-# === 個別管理 ===
+# サービス停止
+./worklog-ctl stop all
+./worklog-ctl stop mcp
+./worklog-ctl stop web
+./worklog-ctl stop agent
+./worklog-ctl stop job
 
-# Agent MCP個別管理
-./scripts/start-agent-mcp.sh /path/to/project
-./scripts/status-agent-mcp.sh
-./scripts/stop-agent-mcp.sh
+# サービス再起動
+./worklog-ctl restart all /path/to/project
+./worklog-ctl restart mcp /path/to/project
 
-# MCP・Web個別管理
-./scripts/start-mcp.sh /path/to/project
-./scripts/start-web.sh /path/to/project
-./scripts/stop-mcp.sh
-./scripts/stop-web.sh
+# ログ確認
+./worklog-ctl logs all
+./worklog-ctl logs mcp --follow
+./worklog-ctl logs web
+./worklog-ctl logs agent
+./worklog-ctl logs job
+
+```
+
+#### worklog-ctlコマンドリファレンス
+
+```bash
+# ヘルプ・バージョン
+./worklog-ctl --help
+./worklog-ctl --version
+
+# 基本的な使用方法
+./worklog-ctl <action> [service] [options] <project-path>
+
+# アクション
+start     # サービスを起動
+stop      # サービスを停止  
+restart   # サービスを再起動
+status    # サービスの状態を確認
+logs      # ログを表示
+
+# サービス（省略時: all）
+all       # 全サービス (mcp + web + job + agent)
+mcp       # MCPサーバーのみ
+web       # Webビューアーのみ
+job       # ジョブワーカーのみ
+agent     # Agent MCPサーバーのみ
+
+# 主要オプション
+--web-port PORT       # Webビューアーのポート番号 (デフォルト: 8080)
+--agent-port PORT     # Agent MCPサーバーのポート番号 (デフォルト: 8002)
+--host HOST           # ホストアドレス (Agent用, デフォルト: localhost)
+--transport TYPE      # トランスポートタイプ [stdio|http] (デフォルト: http)
+--claude              # Claude Code用のMCPサーバー起動モード
+--force               # 既存プロセスを強制停止してから起動
+--follow              # ログを継続監視 (tail -f)
+--url URL             # リモートMCPサーバーURL指定
+--user USER_ID        # ユーザーID指定 (Agent用)
+--poll-interval N     # ポーリング間隔秒数 (Job用)
+
+# Claude Code統合
+./worklog-ctl start mcp --claude /path/to/your/project              # 既存を使い回し
+./worklog-ctl start mcp --claude --force /path/to/your/project      # 強制再起動
+./worklog-ctl start mcp --claude --url http://remote:8001/mcp .     # リモートサーバー指定
 ```
 
 ### データベーススクリプト
