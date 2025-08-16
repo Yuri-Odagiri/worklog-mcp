@@ -5,6 +5,8 @@ import logging
 import argparse
 import os
 import asyncio
+import shutil
+from pathlib import Path
 # 統合起動のため、個別インポートは不要
 
 
@@ -37,49 +39,67 @@ def parse_args():
     return parser.parse_args()
 
 
+def detect_execution_environment():
+    """実行環境を検出する (uvx, uv run, 通常のPython)"""
+    # uvx環境の検出
+    if "uv" in sys.executable and "archive-v0" in sys.executable:
+        return "uvx"
+    
+    # uv run環境の検出
+    if "UV_PROJECT_ENVIRONMENT" in os.environ or ".venv" in sys.executable:
+        return "uv_run"
+    
+    return "python"
+
+
+def get_execution_command(env_type: str, module: str, args: list):
+    """環境に応じた実行コマンドを生成"""
+    if env_type == "uvx":
+        # uvx環境では現在のPython実行可能ファイルを使用
+        return [sys.executable, "-m", module] + args
+    elif env_type == "uv_run":
+        # uv run環境
+        return ["uv", "run", "python", "-m", module] + args
+    else:
+        # 通常のPython環境
+        return [sys.executable, "-m", module] + args
+
+
 async def run_integrated_server(project_path: str, web_port: int = 8080):
     """MCPサーバーとWebビューアーを独立プロセスで統合起動"""
     import subprocess
-    from pathlib import Path
 
     # プロセス管理用
     mcp_process = None
     web_process = None
 
     try:
-        # MCPサーバーとWebサーバーを独立プロセスで起動
-        python_exe = sys.executable
-        project_root = Path(__file__).parent.parent.parent
+        # 実行環境を検出
+        env_type = detect_execution_environment()
+        logger.info(f"実行環境を検出: {env_type}")
 
         # MCPサーバープロセス起動
-        mcp_cmd = [
-            python_exe,
-            "-m",
+        mcp_cmd = get_execution_command(
+            env_type,
             "worklog_mcp.mcp_server",
-            "--project",
-            project_path,
-        ]
+            ["--project", project_path]
+        )
         logger.info(f"MCPサーバープロセス起動: {' '.join(mcp_cmd)}")
         mcp_process = subprocess.Popen(
             mcp_cmd,
-            cwd=project_root,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
 
         # Webサーバープロセス起動
-        web_cmd = [
-            python_exe,
-            "-m",
+        web_cmd = get_execution_command(
+            env_type,
             "worklog_mcp.web_server",
-            "--project",
-            project_path,
-            "--port",
-            str(web_port),
-        ]
+            ["--project", project_path, "--port", str(web_port)]
+        )
         logger.info(f"Webサーバープロセス起動: {' '.join(web_cmd)}")
-        web_process = subprocess.Popen(web_cmd, cwd=project_root)
+        web_process = subprocess.Popen(web_cmd)
 
         logger.info("統合サーバーが起動しました:")
         logger.info(f"  - MCPサーバー: プロセスID {mcp_process.pid}")

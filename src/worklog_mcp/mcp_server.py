@@ -11,8 +11,21 @@ import os
 import sys
 from pathlib import Path
 
-# プロジェクトルートをPythonパスに追加
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# モジュールパスの設定（uvx環境対応）
+def setup_module_path():
+    """モジュールパスを適切に設定"""
+    current_dir = Path(__file__).parent
+    
+    # uvx環境の場合、既にモジュールパスは設定済み
+    if "archive-v0" in str(current_dir):
+        return
+    
+    # 開発環境の場合、プロジェクトルートを追加
+    project_root = current_dir.parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+setup_module_path()
 
 from worklog_mcp.database import Database
 from worklog_mcp.event_bus import EventBus

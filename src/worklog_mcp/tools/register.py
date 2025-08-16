@@ -8,7 +8,9 @@ from mcp.server.fastmcp import FastMCP
 
 from ..database import Database
 from ..project_context import ProjectContext
-from ..logging_config import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 from .user_management import register_user_management_tools
 from .worklog_posting import register_worklog_posting_tools

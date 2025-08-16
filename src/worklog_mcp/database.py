@@ -424,3 +424,9 @@ class Database:
                 "first_post": first_post,
                 "latest_post": latest_post,
             }
+
+    async def close(self) -> None:
+        """データベース接続をクローズする（現在はコンテキストマネージャーを使用しているため、実際の処理は不要）"""
+        # aiosqliteはコンテキストマネージャーで自動的に接続が閉じられるため、
+        # 特別な処理は不要
+        pass
