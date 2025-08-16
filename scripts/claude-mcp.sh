@@ -54,34 +54,55 @@ if [[ "$MCP_URL" =~ ^https?://(localhost|127\.0\.0\.1)(:|/) ]]; then
     # ローカルサーバーの場合
     echo "$(date): ローカルMCPサーバー指定: $MCP_URL" >> "$LOG_FILE"
     
-    # 既存のMCPサーバープロセスをチェック
+    # 既存のworklog-mcpプロセスをチェック（MCP・Web両方）
     EXISTING_MCP=$(ps aux | grep "worklog_mcp.*--transport http" | grep -v grep)
+    EXISTING_WEB=$(ps aux | grep "worklog_mcp.*web_server.py" | grep -v grep)
     
-    if [ ! -z "$EXISTING_MCP" ]; then
+    if [ ! -z "$EXISTING_MCP" ] || [ ! -z "$EXISTING_WEB" ]; then
         if [ "$FORCE_RESTART" = false ]; then
             # 既存サーバーを使い回し（起動処理なし）
-            echo "$(date): 既存ローカルMCPサーバーを使用 (プロジェクト: $PROJECT_PATH)" >> "$LOG_FILE"
-            echo "既存MCPサーバーを使用します ($MCP_URL)"
+            echo "$(date): 既存worklog-mcpプロセスを使用 (プロジェクト: $PROJECT_PATH)" >> "$LOG_FILE"
+            echo "既存worklog-mcpプロセスを使用します ($MCP_URL)"
+            if [ ! -z "$EXISTING_MCP" ]; then
+                echo "- MCPサーバー: 動作中"
+            fi
+            if [ ! -z "$EXISTING_WEB" ]; then
+                echo "- Webビューアー: 動作中"
+            fi
             echo "強制再起動する場合は --force オプションを使用してください"
             exit 0
         else
             # 強制再起動モード - 既存プロセスを停止
-            echo "$(date): 強制再起動: 既存MCPサーバーを停止中..." >> "$LOG_FILE"
-            ps aux | grep "worklog_mcp.*--transport http" | grep -v grep | awk '{print $2}' | xargs -r kill
+            echo "$(date): 強制再起動: 既存worklog-mcpプロセスを停止中..." >> "$LOG_FILE"
+            
+            # MCPサーバーを停止
+            if [ ! -z "$EXISTING_MCP" ]; then
+                echo "- MCPサーバーを停止中..."
+                ps aux | grep "worklog_mcp.*--transport http" | grep -v grep | awk '{print $2}' | xargs -r kill
+            fi
+            
+            # Webビューアーを停止
+            if [ ! -z "$EXISTING_WEB" ]; then
+                echo "- Webビューアーを停止中..."
+                ps aux | grep "worklog_mcp.*web_server.py" | grep -v grep | awk '{print $2}' | xargs -r kill
+            fi
+            
             sleep 3
             
             # 強制終了が必要な場合
-            REMAINING=$(ps aux | grep "worklog_mcp.*--transport http" | grep -v grep)
-            if [ ! -z "$REMAINING" ]; then
-                ps aux | grep "worklog_mcp.*--transport http" | grep -v grep | awk '{print $2}' | xargs -r kill -9
+            REMAINING_MCP=$(ps aux | grep "worklog_mcp.*--transport http" | grep -v grep)
+            REMAINING_WEB=$(ps aux | grep "worklog_mcp.*web_server.py" | grep -v grep)
+            if [ ! -z "$REMAINING_MCP" ] || [ ! -z "$REMAINING_WEB" ]; then
+                echo "- 強制終了中..."
+                ps aux | grep "worklog_mcp" | grep -v grep | awk '{print $2}' | xargs -r kill -9
                 sleep 1
             fi
         fi
     fi
     
-    # MCPサーバーを起動（単体モード）
-    echo "$(date): ローカルMCPサーバーを起動中 (プロジェクト: $PROJECT_PATH)" >> "$LOG_FILE"
-    exec uv run python -m worklog_mcp --project "$PROJECT_PATH" --transport http --mcp-only >> "$LOG_FILE" 2>&1
+    # 統合サーバーを起動（MCP + Web）
+    echo "$(date): worklog-mcp統合サーバーを起動中 (プロジェクト: $PROJECT_PATH)" >> "$LOG_FILE"
+    exec uv run python -m worklog_mcp --project "$PROJECT_PATH" --transport http >> "$LOG_FILE" 2>&1
 else
     # リモートサーバーの場合（起動処理なし）
     echo "$(date): リモートMCPサーバー指定: $MCP_URL (プロジェクト: $PROJECT_PATH)" >> "$LOG_FILE"
