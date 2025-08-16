@@ -5,8 +5,6 @@ import logging
 import argparse
 import os
 import asyncio
-import shutil
-from pathlib import Path
 # 統合起動のため、個別インポートは不要
 
 
@@ -22,7 +20,7 @@ logger = logging.getLogger(__name__)
 def parse_args():
     """コマンドライン引数をパース"""
     parser = argparse.ArgumentParser(
-        description="分報MCPサーバー（統合起動：MCPとWebビューアーの両方）"
+        description="分報MCPサーバー（統合起動：MCPとWebビューアの両方）"
     )
     parser.add_argument(
         "--project",
@@ -40,6 +38,13 @@ def parse_args():
         action="store_true",
         help="MCPサーバーのみを起動（Webサーバーなし）",
     )
+    parser.add_argument(
+        "--transport",
+        type=str,
+        choices=["sse", "stdio"],
+        default="sse",
+        help="トランスポート方式（デフォルト: sse）",
+    )
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
     return parser.parse_args()
 
@@ -49,11 +54,11 @@ def detect_execution_environment():
     # uvx環境の検出
     if "uv" in sys.executable and "archive-v0" in sys.executable:
         return "uvx"
-    
+
     # uv run環境の検出
     if "UV_PROJECT_ENVIRONMENT" in os.environ or ".venv" in sys.executable:
         return "uv_run"
-    
+
     return "python"
 
 
@@ -70,15 +75,17 @@ def get_execution_command(env_type: str, module: str, args: list):
         return [sys.executable, "-m", module] + args
 
 
-async def run_mcp_only_server(project_path: str):
+async def run_mcp_only_server(project_path: str, transport: str = "sse"):
     """MCPサーバー単体を起動"""
     from .mcp_server import run_mcp_server
-    
-    logger.info("MCPサーバー単体モードで起動")
-    await run_mcp_server(project_path)
+
+    logger.info(f"MCPサーバー単体モードで起動 (transport: {transport})")
+    await run_mcp_server(project_path, transport)
 
 
-async def run_integrated_server(project_path: str, web_port: int = 8080):
+async def run_integrated_server(
+    project_path: str, web_port: int = 8080, transport: str = "sse"
+):
     """MCPサーバー（メインプロセス）+ Webサーバー（別プロセス）の統合起動"""
     import subprocess
     from .database import Database
@@ -118,21 +125,34 @@ async def run_integrated_server(project_path: str, web_port: int = 8080):
         web_cmd = get_execution_command(
             env_type,
             "worklog_mcp.web_server",
-            ["--project", project_path, "--port", str(web_port)]
+            ["--project", project_path, "--port", str(web_port)],
         )
         logger.info(f"Webサーバープロセス起動: {' '.join(web_cmd)}")
         web_process = subprocess.Popen(web_cmd)
 
         logger.info("統合サーバーが起動しました:")
-        logger.info("  - MCPサーバー: メインプロセス (stdio通信)")
-        logger.info(f"  - Webビューアー: http://localhost:{web_port} (プロセスID {web_process.pid})")
+        logger.info(f"  - MCPサーバー: メインプロセス (transport: {transport})")
+        logger.info(
+            f"  - Webビューアー: http://localhost:{web_port} (プロセスID {web_process.pid})"
+        )
 
         # MCPサーバーをメインプロセスで実行
         mcp = await create_server(db, project_context, event_bus)
-        logger.info(f"MCPサーバー起動 (プロジェクト: {project_context.get_project_name()})")
-        
-        # stdio通信でMCPサーバー実行
-        await mcp.run_stdio_async()
+        logger.info(
+            f"MCPサーバー起動 (プロジェクト: {project_context.get_project_name()})"
+        )
+
+        # トランスポートに応じてサーバー実行
+        if transport == "stdio":
+            await mcp.run_stdio_async()
+        elif transport == "sse":
+            from .sse_server import run_sse_server
+
+            await run_sse_server(
+                mcp, host="127.0.0.1", port=8001
+            )  # Webサーバーと重複しないポート
+        else:
+            raise ValueError(f"Unknown transport: {transport}")
 
     except KeyboardInterrupt:
         logger.info("統合サーバーを停止しています...")
@@ -174,14 +194,18 @@ def main():
                 f"プロジェクトモードで開始（現在のディレクトリ）: {project_path}"
             )
 
+        logger.info(f"トランスポート: {args.transport}")
+
         if args.mcp_only:
             # MCPサーバー単体モード
             logger.info("MCPサーバー単体モード")
-            asyncio.run(run_mcp_only_server(project_path))
+            asyncio.run(run_mcp_only_server(project_path, args.transport))
         else:
             # 統合サーバーモード（MCP + Web）
             logger.info(f"統合サーバー起動（Web: http://localhost:{args.web_port}）")
-            asyncio.run(run_integrated_server(project_path, args.web_port))
+            asyncio.run(
+                run_integrated_server(project_path, args.web_port, args.transport)
+            )
 
     except KeyboardInterrupt:
         logger.info("サーバーが停止されました (KeyboardInterrupt)")

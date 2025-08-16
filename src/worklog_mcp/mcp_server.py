@@ -11,19 +11,21 @@ import os
 import sys
 from pathlib import Path
 
+
 # モジュールパスの設定（uvx環境対応）
 def setup_module_path():
     """モジュールパスを適切に設定"""
     current_dir = Path(__file__).parent
-    
+
     # uvx環境の場合、既にモジュールパスは設定済み
     if "archive-v0" in str(current_dir):
         return
-    
+
     # 開発環境の場合、プロジェクトルートを追加
     project_root = current_dir.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
+
 
 setup_module_path()
 
@@ -50,7 +52,7 @@ def parse_args():
     return parser.parse_args()
 
 
-async def run_mcp_server(project_path: str) -> None:
+async def run_mcp_server(project_path: str, transport: str = "sse") -> None:
     """MCPサーバーの起動と実行"""
     try:
         # プロジェクトコンテキストの初期化
@@ -80,11 +82,18 @@ async def run_mcp_server(project_path: str) -> None:
         mcp = await create_server(db, project_context, event_bus)
 
         logger.info(
-            f"MCPサーバー起動 (プロジェクト: {project_context.get_project_name()})"
+            f"MCPサーバー起動 (プロジェクト: {project_context.get_project_name()}, transport: {transport})"
         )
 
-        # サーバー実行
-        await mcp.run_stdio_async()
+        # トランスポートに応じてサーバー実行
+        if transport == "stdio":
+            await mcp.run_stdio_async()
+        elif transport == "sse":
+            from .sse_server import run_sse_server
+
+            await run_sse_server(mcp, host="127.0.0.1", port=8000)
+        else:
+            raise ValueError(f"Unknown transport: {transport}")
 
     except KeyboardInterrupt:
         logger.info("MCPサーバーが停止されました (KeyboardInterrupt)")
