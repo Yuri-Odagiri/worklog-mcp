@@ -174,8 +174,14 @@ uv sync
 ### Claude Code用のMCPサーバーのみ
 
 ```bash
-# Claude Code接続用
-./scripts/start-mcp.sh /path/to/your/project
+# ローカルサーバー使用（既存を使い回し）
+./scripts/claude-mcp.sh /path/to/your/project
+
+# ローカルサーバー強制再起動
+./scripts/claude-mcp.sh --force /path/to/your/project
+
+# リモートサーバー指定
+./scripts/claude-mcp.sh --url http://remote-server:8001/mcp /path/to/your/project
 
 # 状態確認
 ./scripts/status.sh
