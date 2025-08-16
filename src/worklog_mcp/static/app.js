@@ -991,6 +991,13 @@ class SimpleWorklogViewer {
                         <span class="edit-icon" onclick="app.editUserField('${user.user_id}', 'appearance')" title="編集">✏️</span>
                     </div>
                 </div>
+                <div class="user-detail-section">
+                    <div class="user-detail-label">指示</div>
+                    <div class="user-detail-content" data-field="instruction" data-user-id="${user.user_id}">
+                        ${this.escapeHtml(user.instruction || '未設定')}
+                        <span class="edit-icon" onclick="app.editUserField('${user.user_id}', 'instruction')" title="編集">✏️</span>
+                    </div>
+                </div>
             </div>
             
             <div class="user-card-stats">
@@ -1186,7 +1193,8 @@ class SimpleWorklogViewer {
         if (!user) return;
 
         const currentValue = user[fieldName] || '';
-        const fieldLabel = fieldName === 'personality' ? '性格・特徴' : '外見・スタイル';
+        const fieldLabel = fieldName === 'personality' ? '性格・特徴' : 
+                          fieldName === 'appearance' ? '外見・スタイル' : '指示';
 
         // 既に編集中の場合は何もしない
         if (contentElement.querySelector('.user-detail-input')) return;

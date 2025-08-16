@@ -107,7 +107,7 @@ async def run_integrated_server(
         # データベースの初期化
         db_path = project_context.get_database_path()
         db = Database(db_path)
-        await db.initialize()
+        await db.initialize(project_context)
 
         # 初回起動チェック
         if await db.is_first_run():

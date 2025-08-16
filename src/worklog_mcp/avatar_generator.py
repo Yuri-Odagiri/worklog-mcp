@@ -46,7 +46,8 @@ async def generate_openai_avatar(
 
         prompt = f"""
 下記人物のバストアップの証明写真風の写真を生成してください。
-背景は白または薄いグレー。
+文字情報は一切画像に含めないこと。
+背景は透明。
 
 ## 名前
 {name}
@@ -75,6 +76,7 @@ async def generate_openai_avatar(
                     "type": "image_generation",
                     "background": "transparent",
                     "quality": "high",
+                    "size": "1024x1024",
                 }
             ],
         )

@@ -84,6 +84,7 @@ class WebDatabaseAdapter:
                 "role": user.role,
                 "personality": user.personality,
                 "appearance": user.appearance,
+                "instruction": user.instruction,
                 "avatar_path": user.avatar_path,
                 "created_at": user.created_at.isoformat(),
                 "last_active": user.last_active.isoformat(),
@@ -103,6 +104,7 @@ class WebDatabaseAdapter:
             "role": user.role,
             "personality": user.personality,
             "appearance": user.appearance,
+            "instruction": user.instruction,
             "theme_color": user.theme_color,
             "avatar_path": user.avatar_path,
             "created_at": user.created_at.isoformat(),
@@ -276,7 +278,7 @@ class WebUIServer:
                 body = await request.json()
 
                 # 更新可能なフィールドのみを取得
-                allowed_fields = {"personality", "appearance"}
+                allowed_fields = {"personality", "appearance", "instruction"}
                 update_data = {k: v for k, v in body.items() if k in allowed_fields}
 
                 if not update_data:

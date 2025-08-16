@@ -404,6 +404,35 @@ body {
     margin-bottom: 16px;
     padding-bottom: 16px;
     border-bottom: 1px solid #f1f3f4;
+    position: relative;
+}
+
+.user-card-delete {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: #dc3545;
+    color: white;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+}
+
+.user-card:hover .user-card-delete {
+    opacity: 1;
+}
+
+.user-card-delete:hover {
+    background: #c82333;
+    transform: scale(1.1);
 }
 
 .user-card-avatar {

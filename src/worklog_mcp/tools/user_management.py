@@ -35,6 +35,7 @@ def register_user_management_tools(
         theme_color: str = "Blue",
         personality: str = "明るく協力的で、チームワークを重視する性格です。",
         appearance: str = "親しみやすい外見で、いつも笑顔を絶やしません。",
+        instruction: str = "",
     ) -> str:
         """新規ユーザーを登録する（初回起動時必須）
 
@@ -76,6 +77,7 @@ def register_user_management_tools(
                 model="",  # デフォルト空文字
                 mcp="",  # デフォルト空文字
                 tools="",  # デフォルト空文字
+                instruction="",
                 avatar_path=None,
             )
             await db.create_user(user)
@@ -166,6 +168,7 @@ def register_user_management_tools(
                         "role": user.role,
                         "personality": user.personality,
                         "appearance": user.appearance,
+                        "instruction": user.instruction,
                         "created_at": user.created_at.isoformat(),
                         "last_active": user.last_active.isoformat(),
                     }

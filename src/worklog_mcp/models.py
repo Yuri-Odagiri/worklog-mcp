@@ -29,6 +29,7 @@ class User:
     model: str = ""  # 使用モデル
     mcp: str = ""  # MCP設定
     tools: str = ""  # ツール設定
+    instruction: str = ""  # AI向けの特別な指示
     avatar_path: Optional[str] = None  # アバター画像のパス
     created_at: datetime = field(default_factory=datetime.now)
     last_active: datetime = field(default_factory=datetime.now)
