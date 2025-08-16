@@ -981,7 +981,72 @@ class SimpleWorklogViewer {
             </div>
         `;
         
+        // アバター要素に動的リサイズ機能を追加
+        const avatarImg = card.querySelector('.user-card-avatar');
+        if (avatarImg) {
+            this.setupAvatarHover(avatarImg, card);
+        }
+        
         return card;
+    }
+    
+    /**
+     * アバターのホバー拡大機能をセットアップ
+     */
+    setupAvatarHover(avatarImg, card) {
+        let isHovering = false;
+        
+        const onMouseEnter = () => {
+            if (isHovering) return;
+            isHovering = true;
+            
+            // 拡大クラスを追加
+            avatarImg.classList.add('enlarged');
+            
+            // カードの寸法を取得
+            const cardRect = card.getBoundingClientRect();
+            const cardStyle = window.getComputedStyle(card);
+            const paddingLeft = parseInt(cardStyle.paddingLeft);
+            const paddingTop = parseInt(cardStyle.paddingTop);
+            const paddingRight = parseInt(cardStyle.paddingRight);
+            const paddingBottom = parseInt(cardStyle.paddingBottom);
+            
+            // 利用可能な最大サイズを計算（パディングを除く）
+            const maxWidth = cardRect.width - paddingLeft - paddingRight;
+            const maxHeight = cardRect.height - paddingTop - paddingBottom;
+            const maxSize = Math.min(maxWidth, maxHeight, 400); // 最大400pxに制限
+            
+            // アバターのスタイルを動的に設定
+            avatarImg.style.width = `${maxSize}px`;
+            avatarImg.style.height = `${maxSize}px`;
+            avatarImg.style.left = `${paddingLeft}px`;
+            avatarImg.style.top = `${paddingTop}px`;
+            
+            // エラー表示の場合はフォントサイズも調整
+            if (avatarImg.classList.contains('error')) {
+                const fontSize = Math.min(maxSize * 0.3, 100); // 拡大サイズの30%、最大100px
+                avatarImg.style.fontSize = `${fontSize}px`;
+            }
+        };
+        
+        const onMouseLeave = () => {
+            isHovering = false;
+            // 拡大クラスを削除
+            avatarImg.classList.remove('enlarged');
+            // CSSのデフォルトスタイルに戻す
+            avatarImg.style.width = '';
+            avatarImg.style.height = '';
+            avatarImg.style.left = '';
+            avatarImg.style.top = '';
+            
+            // エラー表示の場合はフォントサイズもリセット
+            if (avatarImg.classList.contains('error')) {
+                avatarImg.style.fontSize = '';
+            }
+        };
+        
+        avatarImg.addEventListener('mouseenter', onMouseEnter);
+        avatarImg.addEventListener('mouseleave', onMouseLeave);
     }
     
     /**

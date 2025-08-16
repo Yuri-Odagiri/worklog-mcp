@@ -367,12 +367,18 @@ body {
     display: block;
 }
 
+/* ユーザーコンテナ */
+#users-container {
+    overflow: visible;
+}
+
 /* ユーザーグリッド */
 .users-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 20px;
     margin-top: 20px;
+    overflow: visible;
 }
 
 .user-card {
@@ -382,6 +388,8 @@ body {
     padding: 24px;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     border: 1px solid #e9ecef;
+    position: relative;
+    overflow: visible;
 }
 
 .user-card:hover {
@@ -405,6 +413,21 @@ body {
     object-fit: cover;
     border: 3px solid #e9ecef;
     flex-shrink: 0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+}
+
+/* JavaScriptで制御するため、CSSホバー効果は削除 */
+.user-card-avatar.enlarged {
+    border-radius: 8px;
+    object-fit: contain;
+    background-color: white;
+    border: 2px solid #007bff;
+    z-index: 100;
+    position: absolute;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
 }
 
 .user-card-avatar.error {
@@ -414,6 +437,16 @@ body {
     justify-content: center;
     color: #6c757d;
     font-size: 24px;
+}
+
+/* エラー表示アバターの拡大はJavaScriptで制御 */
+.user-card-avatar.error.enlarged {
+    background-color: white;
+    border: 2px solid #6c757d;
+    border-radius: 8px;
+    z-index: 100;
+    position: absolute;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
 }
 
 .user-card-info h3 {
