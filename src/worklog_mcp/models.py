@@ -18,13 +18,17 @@ class User:
     user_id: str
     name: str
     role: str  # 役割（必須）
-    theme_color: str = "Blue"  # Red/Blue/Green/Yellow/Purple/Orange/Pink/Cyanのみ
+    theme_color: str = "Blue"  # Red/Blue/Green/Yellow/Purple/Orange/Pink/Cyan のみ
     personality: str = (
         "明るく協力的で、チームワークを重視する性格です。"  # デフォルトの性格
     )
     appearance: str = (
         "親しみやすい外見で、いつも笑顔を絶やしません。"  # デフォルトの外観
     )
+    description: str = ""  # 詳細説明
+    model: str = ""  # 使用モデル
+    mcp: str = ""  # MCP設定
+    tools: str = ""  # ツール設定
     avatar_path: Optional[str] = None  # アバター画像のパス
     created_at: datetime = field(default_factory=datetime.now)
     last_active: datetime = field(default_factory=datetime.now)

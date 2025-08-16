@@ -41,6 +41,10 @@ class Database:
                 role TEXT DEFAULT 'メンバー',
                 personality TEXT DEFAULT '明るく協力的で、チームワークを重視する性格です。',
                 appearance TEXT DEFAULT '親しみやすい外見で、いつも笑顔を絶やしません。',
+                description TEXT DEFAULT '',
+                model TEXT DEFAULT '',
+                mcp TEXT DEFAULT '',
+                tools TEXT DEFAULT '',
                 avatar_path TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_active DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -93,7 +97,7 @@ class Database:
         """ユーザー作成"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
-                "INSERT INTO users (user_id, name, theme_color, role, personality, appearance, avatar_path, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO users (user_id, name, theme_color, role, personality, appearance, description, model, mcp, tools, avatar_path, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     user.user_id,
                     user.name,
@@ -101,6 +105,10 @@ class Database:
                     user.role,
                     user.personality,
                     user.appearance,
+                    user.description,
+                    user.model,
+                    user.mcp,
+                    user.tools,
                     user.avatar_path,
                     user.created_at,
                     user.last_active,
@@ -112,7 +120,7 @@ class Database:
         """ユーザー取得"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "SELECT user_id, name, theme_color, role, personality, appearance, avatar_path, created_at, last_active FROM users WHERE user_id = ?",
+                "SELECT user_id, name, theme_color, role, personality, appearance, description, model, mcp, tools, avatar_path, created_at, last_active FROM users WHERE user_id = ?",
                 (user_id,),
             )
             row = await cursor.fetchone()
@@ -124,13 +132,17 @@ class Database:
                     role=row[3],
                     personality=row[4],
                     appearance=row[5],
-                    avatar_path=row[6],
-                    created_at=datetime.fromisoformat(row[7])
-                    if isinstance(row[7], str)
-                    else row[7],
-                    last_active=datetime.fromisoformat(row[8])
-                    if isinstance(row[8], str)
-                    else row[8],
+                    description=row[6],
+                    model=row[7],
+                    mcp=row[8],
+                    tools=row[9],
+                    avatar_path=row[10],
+                    created_at=datetime.fromisoformat(row[11])
+                    if isinstance(row[11], str)
+                    else row[11],
+                    last_active=datetime.fromisoformat(row[12])
+                    if isinstance(row[12], str)
+                    else row[12],
                 )
             return None
 
@@ -138,7 +150,7 @@ class Database:
         """全ユーザー取得"""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "SELECT user_id, name, theme_color, role, personality, appearance, avatar_path, created_at, last_active FROM users ORDER BY last_active DESC"
+                "SELECT user_id, name, theme_color, role, personality, appearance, description, model, mcp, tools, avatar_path, created_at, last_active FROM users ORDER BY last_active DESC"
             )
             rows = await cursor.fetchall()
             return [
@@ -149,13 +161,17 @@ class Database:
                     role=row[3],
                     personality=row[4],
                     appearance=row[5],
-                    avatar_path=row[6],
-                    created_at=datetime.fromisoformat(row[7])
-                    if isinstance(row[7], str)
-                    else row[7],
-                    last_active=datetime.fromisoformat(row[8])
-                    if isinstance(row[8], str)
-                    else row[8],
+                    description=row[6],
+                    model=row[7],
+                    mcp=row[8],
+                    tools=row[9],
+                    avatar_path=row[10],
+                    created_at=datetime.fromisoformat(row[11])
+                    if isinstance(row[11], str)
+                    else row[11],
+                    last_active=datetime.fromisoformat(row[12])
+                    if isinstance(row[12], str)
+                    else row[12],
                 )
                 for row in rows
             ]
@@ -203,6 +219,18 @@ class Database:
 
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(sql, values)
+            await db.commit()
+            return db.total_changes > 0
+
+    async def delete_user(self, user_id: str) -> bool:
+        """ユーザーを削除する（関連する分報エントリーも削除）"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # まず関連する分報エントリーを削除
+            await db.execute("DELETE FROM entries WHERE user_id = ?", (user_id,))
+
+            # ユーザーを削除
+            await db.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+
             await db.commit()
             return db.total_changes > 0
 

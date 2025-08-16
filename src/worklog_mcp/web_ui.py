@@ -314,6 +314,42 @@ class WebUIServer:
                 logger.error(f"API Error in update_user: {e}")
                 raise HTTPException(status_code=500, detail="ユーザー情報更新エラー")
 
+        @self.app.delete("/api/users/{user_id}")
+        async def delete_user(user_id: str):
+            """ユーザー削除"""
+            try:
+                # ユーザーの存在確認
+                user = await self.db_adapter.get_user(user_id)
+                if not user:
+                    raise HTTPException(404, "ユーザーが見つかりません")
+
+                # データベースからユーザーを削除（関連する分報エントリーも削除される）
+                deleted = await self.db_adapter.db.delete_user(user_id)
+                if not deleted:
+                    raise HTTPException(500, "ユーザー削除に失敗しました")
+
+                # イベントバスで削除を通知
+                if hasattr(self, "event_bus") and self.event_bus:
+                    await self.event_bus.publish(
+                        "user_deleted", {"user_id": user_id, "name": user["name"]}
+                    )
+
+                # Webクライアントにも通知
+                await self.notify_clients(
+                    "user_deleted", {"user_id": user_id, "name": user["name"]}
+                )
+
+                return {
+                    "success": True,
+                    "message": f"ユーザー '{user['name']}' を削除しました",
+                }
+
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"API Error in delete_user: {e}")
+                raise HTTPException(status_code=500, detail="ユーザー削除エラー")
+
         @self.app.get("/api/entries/{entry_id}")
         async def get_entry_thread(entry_id: str):
             """特定エントリーとスレッド取得"""

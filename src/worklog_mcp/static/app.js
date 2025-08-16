@@ -1,13 +1,13 @@
 class SimpleWorklogViewer {
     constructor() {
         this.entries = [];
-        this.users = {};
         this.eventSource = null;
         this.currentSearch = '';
         this.currentUserSearch = '';
         this.currentTab = 'worklogs';
         this.usersData = [];
         this.loadingUsers = false;
+        this.userLoadAttempted = false;  // 統一されたユーザーロードの無限ループ防止フラグ
         this.init();
     }
     
@@ -52,13 +52,16 @@ class SimpleWorklogViewer {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
             const users = await response.json();
-            this.users = {};
-            users.forEach(user => {
-                this.users[user.user_id] = user;
-            });
+            this.usersData = users;
         } catch (error) {
             console.error('ユーザー読み込みエラー:', error);
+            throw error;
         }
+    }
+
+    // ユーザーIDでユーザーを検索するヘルパー関数
+    getUserById(userId) {
+        return this.usersData.find(user => user.user_id === userId) || null;
     }
     
     setupSSE() {
@@ -146,18 +149,20 @@ class SimpleWorklogViewer {
     async render() {
         const container = document.getElementById('entries-container');
         
-        // ユーザーデータが空の場合は非ブロッキングで再読み込み
-        if (Object.keys(this.users).length === 0 && !this.loadingUsers) {
+        // ユーザーデータが空の場合は非ブロッキングで再読み込み（初期化時のみ）
+        if (this.usersData.length === 0 && !this.loadingUsers && !this.userLoadAttempted) {
             this.loadingUsers = true;
+            this.userLoadAttempted = true;  // 一度だけ試行するフラグ
             // ブロッキングを避けるため、バックグラウンドで読み込み
             this.loadUsers().then(() => {
                 this.loadingUsers = false;
-                // ユーザーデータ読み込み完了後に再描画
-                this.render();
+                // ユーザーデータの有無に関わらず、再描画は行わない（無限ループ防止）
+                // 必要に応じて他の場所から明示的にrenderを呼ぶ
             }).catch(error => {
                 this.loadingUsers = false;
                 console.error('ユーザーデータ読み込みエラー:', error);
             });
+            // 初回読み込み中でも以降の処理は継続（ユーザーなしでも表示する）
         }
         
         // サマリ情報を更新
@@ -187,7 +192,7 @@ class SimpleWorklogViewer {
         div.className = 'entry';
         div.dataset.entryId = entry.id;
         
-        const user = this.users[entry.user_id];
+        const user = this.getUserById(entry.user_id);
         const userName = user ? user.name : entry.user_name || entry.user_id;
         const userRole = user && user.role ? user.role : '';
         const themeColor = user ? user.theme_color : 'Blue';
@@ -617,6 +622,57 @@ class SimpleWorklogViewer {
         });
     }
     
+    async confirmDeleteUser(userId, userName) {
+        const confirmed = confirm(
+            `ユーザー「${userName}」を削除しますか？\n\n` +
+            `この操作により以下が削除されます：\n` +
+            `・ユーザー情報\n` +
+            `・関連する全ての分報エントリー\n\n` +
+            `この操作は元に戻せません。`
+        );
+        
+        if (confirmed) {
+            try {
+                await this.deleteUser(userId);
+            } catch (error) {
+                console.error('ユーザー削除エラー:', error);
+                alert('ユーザー削除に失敗しました: ' + error.message);
+            }
+        }
+    }
+    
+    async deleteUser(userId) {
+        try {
+            const response = await fetch(`/api/users/${userId}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || `HTTP ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            // ローカルデータからも削除
+            this.usersData = this.usersData.filter(user => user.user_id !== userId);
+            
+            // ユーザー一覧を再描画
+            if (this.currentTab === 'users') {
+                await this.renderUsers();
+            }
+            
+            // 分報一覧からも該当ユーザーのエントリーを削除
+            this.entries = this.entries.filter(entry => entry.user_id !== userId);
+            await this.render();
+            
+            this.showNotification(result.message || 'ユーザーを削除しました');
+            
+        } catch (error) {
+            throw error;
+        }
+    }
+    
     /**
      * アバターパスからWebアクセス可能なURLを生成
      */
@@ -636,7 +692,7 @@ class SimpleWorklogViewer {
      */
     generateDynamicAvatar(userId) {
         // ユーザーのテーマカラーを取得（存在しない場合はBlueをデフォルト）
-        const user = this.users[userId];
+        const user = this.getUserById(userId);
         const themeColor = user ? user.theme_color : 'Blue';
         
         // テーマカラーから基本色を取得
@@ -700,8 +756,9 @@ class SimpleWorklogViewer {
         const { user_id, avatar_path } = data;
         
         // ユーザー情報を更新
-        if (this.users[user_id]) {
-            this.users[user_id].avatar_path = avatar_path;
+        const user = this.getUserById(user_id);
+        if (user) {
+            user.avatar_path = avatar_path;
         }
         
         // 表示中の全ての該当ユーザーのアバター画像を更新（分報とユーザーカード両方）
@@ -740,7 +797,8 @@ class SimpleWorklogViewer {
         }
         
         // 通知表示
-        const userName = this.users[user_id]?.name || user_id;
+        const user = this.getUserById(user_id);
+        const userName = user?.name || user_id;
         this.showNotification(`${userName} のアバターが AI生成版に更新されました`);
     }
     
@@ -751,14 +809,9 @@ class SimpleWorklogViewer {
         const { user_id, updated_fields } = data;
         
         // ローカルユーザーデータを更新
-        const user = this.usersData.find(u => u.user_id === user_id);
+        const user = this.getUserById(user_id);
         if (user) {
             Object.assign(user, updated_fields);
-        }
-        
-        // this.usersも更新
-        if (this.users[user_id]) {
-            Object.assign(this.users[user_id], updated_fields);
         }
         
         // 表示されているユーザーカードを更新
@@ -771,7 +824,8 @@ class SimpleWorklogViewer {
         }
         
         // 通知表示
-        const userName = this.users[user_id]?.name || user_id;
+        const user = this.getUserById(user_id);
+        const userName = user?.name || user_id;
         const fieldNames = Object.keys(updated_fields).map(f => 
             f === 'personality' ? '性格・特徴' : '外見・スタイル'
         ).join('、');
@@ -819,6 +873,7 @@ class SimpleWorklogViewer {
     async refreshUsers() {
         if (this.currentTab === 'users') {
             this.usersData = []; // キャッシュをクリア
+            this.userLoadAttempted = false; // フラグもリセット
             await this.renderUsers();
         }
     }
@@ -830,9 +885,16 @@ class SimpleWorklogViewer {
         const container = document.getElementById('users-container');
         
         try {
-            // ユーザーデータが未取得の場合は取得
-            if (this.usersData.length === 0) {
-                await this.loadUsersData();
+            // ユーザーデータが未取得の場合は取得（一度だけ）
+            if (this.usersData.length === 0 && !this.userLoadAttempted) {
+                this.userLoadAttempted = true;
+                try {
+                    await this.loadUsers();
+                } catch (error) {
+                    console.error('User data load failed:', error);
+                    // エラーでも無限ループを防ぐ
+                    this.usersData = []; // 空配列を設定して後続処理を続行
+                }
             }
             
             let filteredUsers = this.usersData;
@@ -878,20 +940,7 @@ class SimpleWorklogViewer {
         }
     }
     
-    /**
-     * ユーザーデータの詳細情報を取得
-     */
-    async loadUsersData() {
-        try {
-            const response = await fetch('/api/users');
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            this.usersData = await response.json();
-        } catch (error) {
-            console.error('ユーザーデータ読み込みエラー:', error);
-            throw error;
-        }
-    }
+    // loadUsersData関数は削除されました - loadUsers()が両方の形式を処理するようになりました
     
     /**
      * ユーザーカード要素を作成
@@ -923,6 +972,9 @@ class SimpleWorklogViewer {
                     <div class="user-card-id">ID: ${this.escapeHtml(user.user_id)}</div>
                     ${user.role ? `<div class="user-card-role" style="background-color: ${themeStyle.background}; color: ${themeStyle.text};">${this.escapeHtml(user.role)}</div>` : ''}
                     <div class="user-card-theme">テーマ: ${user.theme_color}</div>
+                </div>
+                <div class="user-card-delete" onclick="app.confirmDeleteUser('${user.user_id}', '${this.escapeHtml(user.name)}')" title="ユーザーを削除">
+                    🗑️
                 </div>
             </div>
             
