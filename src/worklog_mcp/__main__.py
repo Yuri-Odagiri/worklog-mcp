@@ -41,9 +41,9 @@ def parse_args():
     parser.add_argument(
         "--transport",
         type=str,
-        choices=["sse", "stdio"],
-        default="sse",
-        help="トランスポート方式（デフォルト: sse）",
+        choices=["http", "stdio"],
+        default="http",
+        help="トランスポート方式（デフォルト: http）",
     )
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
     return parser.parse_args()
@@ -75,7 +75,7 @@ def get_execution_command(env_type: str, module: str, args: list):
         return [sys.executable, "-m", module] + args
 
 
-async def run_mcp_only_server(project_path: str, transport: str = "sse"):
+async def run_mcp_only_server(project_path: str, transport: str = "http"):
     """MCPサーバー単体を起動"""
     from .mcp_server import run_mcp_server
 
@@ -84,7 +84,7 @@ async def run_mcp_only_server(project_path: str, transport: str = "sse"):
 
 
 async def run_integrated_server(
-    project_path: str, web_port: int = 8080, transport: str = "sse"
+    project_path: str, web_port: int = 8080, transport: str = "http"
 ):
     """MCPサーバー（メインプロセス）+ Webサーバー（別プロセス）の統合起動"""
     import subprocess
@@ -145,10 +145,10 @@ async def run_integrated_server(
         # トランスポートに応じてサーバー実行
         if transport == "stdio":
             await mcp.run_stdio_async()
-        elif transport == "sse":
-            from .sse_server import run_sse_server
+        elif transport == "http":
+            from .sse_server import run_http_server
 
-            await run_sse_server(
+            await run_http_server(
                 mcp, host="127.0.0.1", port=8001
             )  # Webサーバーと重複しないポート
         else:

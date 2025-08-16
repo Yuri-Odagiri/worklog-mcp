@@ -1,4 +1,4 @@
-"""SSE (Server-Sent Events) トランスポート実装"""
+"""Streamable HTTP トランスポート実装"""
 
 import asyncio
 import json
@@ -15,8 +15,8 @@ from starlette.requests import Request
 logger = logging.getLogger(__name__)
 
 
-class SSEServer:
-    """SSE (Server-Sent Events) トランスポートサーバー"""
+class HTTPServer:
+    """Streamable HTTP トランスポートサーバー"""
 
     def __init__(self, mcp_server: FastMCP, host: str = "127.0.0.1", port: int = 8000):
         self.mcp_server = mcp_server
@@ -27,8 +27,6 @@ class SSEServer:
     def _create_app(self) -> Starlette:
         """Starletteアプリケーションを作成"""
         routes = [
-            Route("/sse", self._handle_sse, methods=["GET"]),
-            Route("/messages", self._handle_post_message, methods=["POST"]),
             Route(
                 "/mcp", self._handle_mcp_endpoint, methods=["GET", "POST"]
             ),  # Streamable HTTP endpoint
@@ -46,54 +44,6 @@ class SSEServer:
         )
 
         return app
-
-    async def _handle_sse(self, request: Request) -> StreamingResponse:
-        """SSEストリームハンドラー（レガシーHTTP+SSE）"""
-        logger.info("SSE connection established")
-
-        async def event_stream():
-            try:
-                # エンドポイント情報を送信
-                endpoint_event = {
-                    "event": "endpoint",
-                    "data": json.dumps({"uri": "/messages"}),
-                }
-                yield f"event: endpoint\ndata: {json.dumps({'uri': '/messages'})}\n\n"
-
-                # 継続的にメッセージを送信（実装例）
-                while True:
-                    # ここで実際のMCPメッセージ処理を行う
-                    await asyncio.sleep(1)  # 実際の実装では適切なメッセージ待機
-
-            except Exception as e:
-                logger.error(f"SSE stream error: {e}")
-            finally:
-                logger.info("SSE connection closed")
-
-        return StreamingResponse(
-            event_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-            },
-        )
-
-    async def _handle_post_message(self, request: Request) -> Response:
-        """POSTメッセージハンドラー（レガシーHTTP+SSE）"""
-        try:
-            data = await request.json()
-            logger.debug(f"Received POST message: {data}")
-
-            # MCPメッセージの処理
-            # TODO: 実際のMCPメッセージ処理を実装
-
-            return Response(status_code=202)  # Accepted
-
-        except Exception as e:
-            logger.error(f"POST message error: {e}")
-            return Response(status_code=400, content=str(e))
 
     async def _handle_mcp_endpoint(self, request: Request) -> Response:
         """Streamable HTTPエンドポイント"""
@@ -204,13 +154,11 @@ class SSEServer:
             return Response(status_code=500, content=str(e))
 
     async def run(self):
-        """SSEサーバーを起動"""
+        """HTTPサーバーを起動"""
         import uvicorn
 
-        logger.info(f"SSEサーバーを起動中... http://{self.host}:{self.port}")
+        logger.info(f"HTTPサーバーを起動中... http://{self.host}:{self.port}")
         logger.info("エンドポイント:")
-        logger.info(f"  - SSE (legacy): http://{self.host}:{self.port}/sse")
-        logger.info(f"  - POST (legacy): http://{self.host}:{self.port}/messages")
         logger.info(f"  - Streamable HTTP: http://{self.host}:{self.port}/mcp")
 
         config = uvicorn.Config(
@@ -220,9 +168,9 @@ class SSEServer:
         await server.serve()
 
 
-async def run_sse_server(
+async def run_http_server(
     mcp_server: FastMCP, host: str = "127.0.0.1", port: int = 8000
 ):
-    """SSEサーバーを起動"""
-    sse_server = SSEServer(mcp_server, host, port)
-    await sse_server.run()
+    """HTTPサーバーを起動"""
+    http_server = HTTPServer(mcp_server, host, port)
+    await http_server.run()

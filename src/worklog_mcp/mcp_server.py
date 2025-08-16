@@ -52,7 +52,7 @@ def parse_args():
     return parser.parse_args()
 
 
-async def run_mcp_server(project_path: str, transport: str = "sse") -> None:
+async def run_mcp_server(project_path: str, transport: str = "http") -> None:
     """MCPサーバーの起動と実行"""
     try:
         # プロジェクトコンテキストの初期化
@@ -88,10 +88,10 @@ async def run_mcp_server(project_path: str, transport: str = "sse") -> None:
         # トランスポートに応じてサーバー実行
         if transport == "stdio":
             await mcp.run_stdio_async()
-        elif transport == "sse":
-            from .sse_server import run_sse_server
+        elif transport == "http":
+            from .sse_server import run_http_server
 
-            await run_sse_server(mcp, host="127.0.0.1", port=8000)
+            await run_http_server(mcp, host="127.0.0.1", port=8000)
         else:
             raise ValueError(f"Unknown transport: {transport}")
 

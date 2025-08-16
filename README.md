@@ -186,6 +186,7 @@ MCPサーバー → イベントバス → Webビューアー → ブラウザ
 Webビューアー起動後、以下のURLでアクセス可能：
 
 - **Webビューアー**: `http://localhost:8080`
+- **MCPサーバー (Streamable HTTP)**: `http://localhost:8001/mcp`
 - **REST API**: `http://localhost:8080/api/*`
 - **SSEストリーム**: `http://localhost:8080/events`
 
@@ -273,15 +274,14 @@ Claude DesktopでMCPサーバーとして利用する場合：
 #### 方法1: Claude Code (推奨)
 
 ```bash
-# MCPサーバーのみ（通常の使用方法）
-claude mcp add worklog-project -s project -- uv run python -m worklog_mcp.mcp_server --project .
+# MCPサーバーのみ（stdio）
+claude mcp add worklog-stdio -- uv run python -m worklog_mcp.mcp_server --project . --transport stdio
 
-# 現在のディレクトリをプロジェクトとして追加
-cd /path/to/your-project
-claude mcp add worklog-current -s project -- uv run python -m worklog_mcp.mcp_server
+# MCPサーバー（Streamable HTTP）
+claude mcp add --transport http worklog http://127.0.0.1:8001/mcp --command "uv run python -m worklog_mcp.mcp_server --project . --transport http"
 
-# Gitリポジトリから直接追加
-claude mcp add worklog -s project -- uvx --from git+https://github.com/Yuri-Odagiri/worklog-mcp.git worklog-mcp.mcp_server
+# Gitリポジトリから直接追加（統合サーバー）
+claude mcp add --transport http worklog http://127.0.0.1:8001/mcp --command "uvx --from git+https://github.com/Yuri-Odagiri/worklog-mcp.git worklog-mcp"
 ```
 
 #### 方法2: 手動設定（開発モード）
@@ -291,14 +291,17 @@ claude mcp add worklog -s project -- uvx --from git+https://github.com/Yuri-Odag
 ```json
 {
   "mcpServers": {
-    "worklog-project-a": {
+    "worklog-stdio": {
+      "type": "stdio",
       "command": "uv",
-      "args": ["run", "python", "-m", "worklog_mcp.mcp_server", "--project", "/path/to/project-a"],
+      "args": ["run", "python", "-m", "worklog_mcp.mcp_server", "--project", "/path/to/project", "--transport", "stdio"],
       "cwd": "/absolute/path/to/worklog-mcp"
     },
-    "worklog-project-b": {
-      "command": "uv", 
-      "args": ["run", "python", "-m", "worklog_mcp.mcp_server", "--project", "/path/to/project-b"],
+    "worklog-http": {
+      "type": "http",
+      "url": "http://127.0.0.1:8001/mcp",
+      "command": "uv",
+      "args": ["run", "python", "-m", "worklog_mcp", "--project", "/path/to/project"],
       "cwd": "/absolute/path/to/worklog-mcp"
     }
   }
@@ -306,10 +309,11 @@ claude mcp add worklog -s project -- uvx --from git+https://github.com/Yuri-Odag
 ```
 
 **注意**: 
-- MCPサーバーは`worklog_mcp.mcp_server`を使用（Webビューアーは含まれません）
+- **stdio**: MCPサーバーのみ (`worklog_mcp.mcp_server`)
+- **http**: 統合サーバー (MCPサーバー + Webビューアー) (`worklog_mcp`)
 - `cwd`は`worklog-mcp`プロジェクトディレクトリの絶対パス
 - `--project`引数でプロジェクトディレクトリを指定
-- 複数プロジェクトで完全にデータが分離される
+- デフォルトトランスポート: `http` (Streamable HTTP)
 
 ### Webビューアーの起動
 
@@ -339,9 +343,11 @@ open http://localhost:8080
 ```json
 {
   "mcpServers": {
-    "worklog-project-a": {
+    "worklog-http": {
+      "type": "http",
+      "url": "http://127.0.0.1:8001/mcp",
       "command": "uvx",
-      "args": ["/absolute/path/to/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl", "mcp_server", "--project", "/path/to/project-a"]
+      "args": ["/absolute/path/to/worklog-mcp/dist/worklog_mcp-0.1.0-py3-none-any.whl", "--project", "/path/to/project"]
     }
   }
 }
@@ -359,8 +365,10 @@ open http://localhost:8080
 {
   "mcpServers": {
     "worklog": {
+      "type": "http",
+      "url": "http://127.0.0.1:8001/mcp",
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/Yuri-Odagiri/worklog-mcp.git", "worklog-mcp", "mcp_server", "--project", "."]
+      "args": ["--from", "git+https://github.com/Yuri-Odagiri/worklog-mcp.git", "worklog-mcp", "--project", "."]
     }
   }
 }
@@ -375,8 +383,10 @@ PyPI公開後の実行：
 {
   "mcpServers": {
     "worklog": {
+      "type": "http",
+      "url": "http://127.0.0.1:8001/mcp",
       "command": "uvx",
-      "args": ["worklog-mcp", "mcp_server", "--project", "."]
+      "args": ["worklog-mcp", "--project", "."]
     }
   }
 }
@@ -619,6 +629,7 @@ curl -N http://localhost:8080/events
 
 ### 新アーキテクチャ
 - **独立プロセス**: MCPサーバーとWebビューアーが完全分離
+- **MCPトランスポート**: Streamable HTTP (デフォルト) / stdio
 - **プロセス間通信**: SQLiteベースのイベントバス
 - **通知システム**: MCP投稿 → イベントバス → SSE → Webクライアント即座更新
 - **統合起動**: 便利用として両プロセスを自動管理
