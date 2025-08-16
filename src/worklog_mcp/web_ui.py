@@ -96,7 +96,7 @@ class WebDatabaseAdapter:
         user = await self.db.get_user(user_id)
         if not user:
             return None
-        
+
         return {
             "user_id": user.user_id,
             "name": user.name,
@@ -106,7 +106,7 @@ class WebDatabaseAdapter:
             "theme_color": user.theme_color,
             "avatar_path": user.avatar_path,
             "created_at": user.created_at.isoformat(),
-            "last_active": user.last_active.isoformat()
+            "last_active": user.last_active.isoformat(),
         }
 
     async def get_thread_for_api(self, entry_id: str) -> Optional[Dict[str, Any]]:
@@ -156,7 +156,9 @@ class WebDatabaseAdapter:
 class WebUIServer:
     """分報Web UIサーバークラス"""
 
-    def __init__(self, db: Database, project_context=None, job_queue=None, event_bus=None):
+    def __init__(
+        self, db: Database, project_context=None, job_queue=None, event_bus=None
+    ):
         self.db_adapter = WebDatabaseAdapter(db)
         self.project_context = project_context
         self.job_queue = job_queue
@@ -206,59 +208,111 @@ class WebUIServer:
 
                 # 1. 即座にグラデーション画像を生成
                 from worklog_mcp.avatar_generator import generate_gradient_avatar
-                
+
                 theme_color = user.get("theme_color", "Blue")
                 temp_avatar_path = await generate_gradient_avatar(
                     theme_color, user_id, self.project_context
                 )
-                
+
                 # 2. DBを仮アバターパスで即座に更新
-                await self.db_adapter.db.update_user_avatar_path(user_id, temp_avatar_path)
-                
+                await self.db_adapter.db.update_user_avatar_path(
+                    user_id, temp_avatar_path
+                )
+
                 # 3. EventBusで即座にアバター更新を通知（仮画像として）
-                if hasattr(self, 'event_bus') and self.event_bus:
+                if hasattr(self, "event_bus") and self.event_bus:
                     await self.event_bus.publish(
                         "avatar_updated",
-                        {"user_id": user_id, "avatar_path": temp_avatar_path}
+                        {"user_id": user_id, "avatar_path": temp_avatar_path},
                     )
-                
+
                 # 4. Webクライアントにも即座に通知
                 await self.notify_clients(
                     "avatar_updated",
-                    {"user_id": user_id, "avatar_path": temp_avatar_path}
+                    {"user_id": user_id, "avatar_path": temp_avatar_path},
                 )
 
                 # 5. ジョブキューにavatar_generationジョブをエンキュー（AI生成用）
-                if hasattr(self, 'job_queue') and self.job_queue:
+                if hasattr(self, "job_queue") and self.job_queue:
                     job_payload = {
                         "user_id": user["user_id"],
                         "name": user["name"],
                         "role": user.get("role", ""),
                         "personality": user.get("personality", ""),
                         "appearance": user.get("appearance", ""),
-                        "theme_color": theme_color
+                        "theme_color": theme_color,
                     }
-                    
-                    job_id = await self.job_queue.enqueue("avatar_generation", job_payload)
-                    
-                    logger.info(f"アバター再生成ジョブを開始: {user_id} (Job ID: {job_id})")
-                    
+
+                    job_id = await self.job_queue.enqueue(
+                        "avatar_generation", job_payload
+                    )
+
+                    logger.info(
+                        f"アバター再生成ジョブを開始: {user_id} (Job ID: {job_id})"
+                    )
+
                     return {
-                        "success": True, 
+                        "success": True,
                         "message": f"{user['name']} のアバター再生成を開始しました",
                         "job_id": job_id,
-                        "temp_avatar_path": temp_avatar_path
+                        "temp_avatar_path": temp_avatar_path,
                     }
                 else:
                     # ジョブキューが利用できない場合はエラー
                     logger.error("ジョブキューが初期化されていません")
                     raise HTTPException(503, "アバター生成サービスが利用できません")
-                    
+
             except HTTPException:
                 raise
             except Exception as e:
                 logger.error(f"API Error in regenerate_user_avatar: {e}")
                 raise HTTPException(status_code=500, detail="アバター再生成エラー")
+
+        @self.app.patch("/api/users/{user_id}")
+        async def update_user(user_id: str, request: Request):
+            """ユーザー情報更新"""
+            try:
+                # リクエストボディを取得
+                body = await request.json()
+
+                # 更新可能なフィールドのみを取得
+                allowed_fields = {"personality", "appearance"}
+                update_data = {k: v for k, v in body.items() if k in allowed_fields}
+
+                if not update_data:
+                    raise HTTPException(400, "更新可能なフィールドが指定されていません")
+
+                # ユーザーの存在確認
+                user = await self.db_adapter.get_user(user_id)
+                if not user:
+                    raise HTTPException(404, "ユーザーが見つかりません")
+
+                # データベースを更新
+                await self.db_adapter.db.update_user_info(user_id, update_data)
+
+                # イベントバスで更新を通知
+                if hasattr(self, "event_bus") and self.event_bus:
+                    await self.event_bus.publish(
+                        "user_updated",
+                        {"user_id": user_id, "updated_fields": update_data},
+                    )
+
+                # Webクライアントにも通知
+                await self.notify_clients(
+                    "user_updated", {"user_id": user_id, "updated_fields": update_data}
+                )
+
+                return {
+                    "success": True,
+                    "message": "ユーザー情報を更新しました",
+                    "updated_fields": update_data,
+                }
+
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"API Error in update_user: {e}")
+                raise HTTPException(status_code=500, detail="ユーザー情報更新エラー")
 
         @self.app.get("/api/entries/{entry_id}")
         async def get_entry_thread(entry_id: str):

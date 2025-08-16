@@ -114,6 +114,9 @@ class SimpleWorklogViewer {
             case 'avatar_updated':
                 this.handleAvatarUpdate(event.data);
                 break;
+            case 'user_updated':
+                this.handleUserUpdate(event.data);
+                break;
             case 'ping':
                 // Keep-alive応答（何もしない）
                 break;
@@ -196,6 +199,9 @@ class SimpleWorklogViewer {
         // テーマカラーを淡い色に変換
         const lightColor = this.getThemeColorStyle(themeColor);
         
+        // 光彩エフェクトの設定
+        this.applyGlowEffect(div, date, themeColor);
+        
         // アバター画像URLを構築（ユーザー情報からアバターパスを取得）
         const userAvatarPath = user ? user.avatar_path : null;
         const avatarUrl = this.getAvatarUrl(userAvatarPath || '', entry.user_id);
@@ -267,6 +273,60 @@ class SimpleWorklogViewer {
         };
         
         return colorMap[color] || colorMap['Blue'];
+    }
+    
+    /**
+     * 分報に光彩エフェクトを適用（投稿から3分以内の場合）
+     */
+    applyGlowEffect(entryElement, postDate, themeColor) {
+        const now = new Date();
+        const diffMs = now - postDate;
+        const diffMins = diffMs / 60000; // ミリ秒を分に変換
+        
+        // 3分以内の投稿のみ光彩エフェクトを適用
+        if (diffMins <= 3) {
+            // テーマカラーに応じた光彩色を取得
+            const glowColor = this.getGlowColor(themeColor);
+            
+            // CSS変数として光彩色を設定
+            entryElement.style.setProperty('--glow-color', glowColor);
+            
+            // 光彩クラスを追加
+            entryElement.classList.add('recent-glow');
+            
+            // 残り時間を計算してアニメーション開始時間を調整
+            const remainingMs = (3 * 60 * 1000) - diffMs; // 残りミリ秒
+            const animationDelay = -(180000 - remainingMs); // アニメーション開始時刻を調整
+            
+            if (animationDelay < 0) {
+                entryElement.style.animationDelay = `${animationDelay}ms`;
+            }
+            
+            // 3分後に光彩クラスを削除（クリーンアップ）
+            setTimeout(() => {
+                entryElement.classList.remove('recent-glow');
+                entryElement.style.removeProperty('--glow-color');
+                entryElement.style.removeProperty('animation-delay');
+            }, remainingMs);
+        }
+    }
+    
+    /**
+     * テーマカラーに応じた光彩色を取得
+     */
+    getGlowColor(themeColor) {
+        const glowColorMap = {
+            'Red': '#ea7676',
+            'Blue': '#91c5f7',
+            'Green': '#95d982',
+            'Yellow': '#ffcc80',
+            'Purple': '#c084fc',
+            'Orange': '#ffb366',
+            'Pink': '#f9a8d4',
+            'Cyan': '#7dd3fc'
+        };
+        
+        return glowColorMap[themeColor] || glowColorMap['Blue'];
     }
     
     updateConnectionStatus(status, text) {
@@ -685,6 +745,40 @@ class SimpleWorklogViewer {
     }
     
     /**
+     * ユーザー情報更新イベントを処理
+     */
+    handleUserUpdate(data) {
+        const { user_id, updated_fields } = data;
+        
+        // ローカルユーザーデータを更新
+        const user = this.usersData.find(u => u.user_id === user_id);
+        if (user) {
+            Object.assign(user, updated_fields);
+        }
+        
+        // this.usersも更新
+        if (this.users[user_id]) {
+            Object.assign(this.users[user_id], updated_fields);
+        }
+        
+        // 表示されているユーザーカードを更新
+        for (const field in updated_fields) {
+            const contentElement = document.querySelector(`.user-detail-content[data-field="${field}"][data-user-id="${user_id}"]`);
+            if (contentElement && !contentElement.querySelector('.user-detail-input')) {
+                // 編集中でない場合のみ更新
+                this.restoreUserFieldDisplay(user_id, field, updated_fields[field]);
+            }
+        }
+        
+        // 通知表示
+        const userName = this.users[user_id]?.name || user_id;
+        const fieldNames = Object.keys(updated_fields).map(f => 
+            f === 'personality' ? '性格・特徴' : '外見・スタイル'
+        ).join('、');
+        this.showNotification(`${userName} の${fieldNames}が更新されました`);
+    }
+    
+    /**
      * タブ切り替え機能
      */
     switchTab(tabName) {
@@ -833,18 +927,20 @@ class SimpleWorklogViewer {
             </div>
             
             <div class="user-card-details">
-                ${user.personality ? `
-                    <div class="user-detail-section">
-                        <div class="user-detail-label">性格・特徴</div>
-                        <div class="user-detail-content">${this.escapeHtml(user.personality)}</div>
+                <div class="user-detail-section">
+                    <div class="user-detail-label">性格・特徴</div>
+                    <div class="user-detail-content" data-field="personality" data-user-id="${user.user_id}">
+                        ${this.escapeHtml(user.personality || '未設定')}
+                        <span class="edit-icon" onclick="app.editUserField('${user.user_id}', 'personality')" title="編集">✏️</span>
                     </div>
-                ` : ''}
-                ${user.appearance ? `
-                    <div class="user-detail-section">
-                        <div class="user-detail-label">外見・スタイル</div>
-                        <div class="user-detail-content">${this.escapeHtml(user.appearance)}</div>
+                </div>
+                <div class="user-detail-section">
+                    <div class="user-detail-label">外見・スタイル</div>
+                    <div class="user-detail-content" data-field="appearance" data-user-id="${user.user_id}">
+                        ${this.escapeHtml(user.appearance || '未設定')}
+                        <span class="edit-icon" onclick="app.editUserField('${user.user_id}', 'appearance')" title="編集">✏️</span>
                     </div>
-                ` : ''}
+                </div>
             </div>
             
             <div class="user-card-stats">
@@ -962,6 +1058,117 @@ class SimpleWorklogViewer {
             button.textContent = originalText;
             button.classList.remove('loading');
         }
+    }
+
+    /**
+     * ユーザーフィールドの編集を開始
+     */
+    editUserField(userId, fieldName) {
+        const contentElement = document.querySelector(`.user-detail-content[data-field="${fieldName}"][data-user-id="${userId}"]`);
+        if (!contentElement) return;
+
+        const user = this.usersData.find(u => u.user_id === userId);
+        if (!user) return;
+
+        const currentValue = user[fieldName] || '';
+        const fieldLabel = fieldName === 'personality' ? '性格・特徴' : '外見・スタイル';
+
+        // 既に編集中の場合は何もしない
+        if (contentElement.querySelector('.user-detail-input')) return;
+
+        // 編集用のテキストエリアを作成
+        contentElement.innerHTML = `
+            <textarea class="user-detail-input" 
+                      placeholder="${fieldLabel}を入力してください..."
+                      data-original="${this.escapeHtml(currentValue)}">${this.escapeHtml(currentValue)}</textarea>
+            <div class="user-detail-actions">
+                <button class="user-detail-save-btn" onclick="app.saveUserField('${userId}', '${fieldName}')">保存</button>
+                <button class="user-detail-cancel-btn" onclick="app.cancelEditUserField('${userId}', '${fieldName}')">キャンセル</button>
+            </div>
+        `;
+
+        // テキストエリアにフォーカスを当てる
+        const textarea = contentElement.querySelector('.user-detail-input');
+        textarea.focus();
+        textarea.select();
+    }
+
+    /**
+     * ユーザーフィールドの保存
+     */
+    async saveUserField(userId, fieldName) {
+        const contentElement = document.querySelector(`.user-detail-content[data-field="${fieldName}"][data-user-id="${userId}"]`);
+        const textarea = contentElement.querySelector('.user-detail-input');
+        if (!textarea) return;
+
+        const newValue = textarea.value.trim();
+        const originalValue = textarea.getAttribute('data-original');
+
+        // 値が変更されていない場合はキャンセル
+        if (newValue === originalValue) {
+            this.cancelEditUserField(userId, fieldName);
+            return;
+        }
+
+        try {
+            // API呼び出し（実装必要）
+            const response = await fetch(`/api/users/${userId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    [fieldName]: newValue
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || `HTTP ${response.status}`);
+            }
+
+            // ローカルデータも更新
+            const user = this.usersData.find(u => u.user_id === userId);
+            if (user) {
+                user[fieldName] = newValue;
+            }
+
+            // 表示を元に戻す
+            this.restoreUserFieldDisplay(userId, fieldName, newValue);
+
+            // 成功メッセージ
+            this.showNotification('ユーザー情報を更新しました');
+
+        } catch (error) {
+            console.error('ユーザー情報更新エラー:', error);
+            alert('ユーザー情報の更新に失敗しました: ' + error.message);
+        }
+    }
+
+    /**
+     * ユーザーフィールドの編集をキャンセル
+     */
+    cancelEditUserField(userId, fieldName) {
+        const contentElement = document.querySelector(`.user-detail-content[data-field="${fieldName}"][data-user-id="${userId}"]`);
+        const textarea = contentElement.querySelector('.user-detail-input');
+        if (!textarea) return;
+
+        const originalValue = textarea.getAttribute('data-original');
+        this.restoreUserFieldDisplay(userId, fieldName, originalValue);
+    }
+
+    /**
+     * ユーザーフィールドの表示を元に戻す
+     */
+    restoreUserFieldDisplay(userId, fieldName, value) {
+        const contentElement = document.querySelector(`.user-detail-content[data-field="${fieldName}"][data-user-id="${userId}"]`);
+        if (!contentElement) return;
+
+        const displayValue = value || '未設定';
+        contentElement.innerHTML = `
+            ${this.escapeHtml(displayValue)}
+            <span class="edit-icon" onclick="app.editUserField('${userId}', '${fieldName}')" title="編集">✏️</span>
+        `;
     }
 }
 

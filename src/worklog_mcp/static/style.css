@@ -40,6 +40,23 @@ body {
     background: white; margin: 15px 0; padding: 20px; 
     border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
     display: flex; gap: 15px; position: relative;
+    transition: box-shadow 0.3s ease, border-radius 0.3s ease;
+}
+
+/* 光彩エフェクト用クラス（投稿後3分間表示） */
+.entry.recent-glow {
+    border-radius: 10px;
+    animation: glowFadeOut 180s linear forwards;
+}
+
+/* 光彩エフェクトアニメーション（3分=180秒でフェードアウト） */
+@keyframes glowFadeOut {
+    0% {
+        box-shadow: 0px 0px 32px 2px var(--glow-color, #91c5f7), 0 2px 4px rgba(0,0,0,0.1);
+    }
+    100% {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
 }
 .avatar {
     width: 48px; height: 48px; border-radius: 50%;
@@ -516,6 +533,14 @@ body {
     border-top: 1px solid #e9ecef;
     display: flex;
     justify-content: center;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+}
+
+.user-card:hover .user-card-actions {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .regenerate-avatar-btn {
@@ -554,6 +579,78 @@ body {
     to {
         opacity: 1;
     }
+}
+
+/* ユーザー情報編集関連 */
+.user-detail-content {
+    position: relative;
+}
+
+.user-detail-content:hover .edit-icon {
+    opacity: 1;
+}
+
+.edit-icon {
+    position: absolute;
+    right: 0;
+    top: 0;
+    padding: 2px 4px;
+    background: rgba(0, 123, 255, 0.1);
+    border-radius: 3px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    font-size: 0.8em;
+}
+
+.edit-icon:hover {
+    background: rgba(0, 123, 255, 0.2);
+}
+
+.user-detail-input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: inherit;
+    background: white;
+    resize: vertical;
+    min-height: 60px;
+}
+
+.user-detail-actions {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.user-detail-save-btn, .user-detail-cancel-btn {
+    padding: 4px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8em;
+    transition: all 0.2s ease;
+}
+
+.user-detail-save-btn {
+    background: #28a745;
+    color: white;
+}
+
+.user-detail-save-btn:hover {
+    background: #218838;
+}
+
+.user-detail-cancel-btn {
+    background: #6c757d;
+    color: white;
+}
+
+.user-detail-cancel-btn:hover {
+    background: #5a6268;
 }
 
 /* レスポンシブ対応 */

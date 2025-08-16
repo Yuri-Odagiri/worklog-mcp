@@ -179,6 +179,33 @@ class Database:
             await db.commit()
             return db.total_changes > 0
 
+    async def update_user_info(self, user_id: str, update_data: Dict[str, Any]) -> bool:
+        """ユーザー情報を更新する"""
+        if not update_data:
+            return False
+
+        # 更新可能なフィールドのみを処理
+        allowed_fields = {"personality", "appearance", "role"}
+        filtered_data = {k: v for k, v in update_data.items() if k in allowed_fields}
+
+        if not filtered_data:
+            return False
+
+        # SQL文を動的に構築
+        set_clauses = []
+        values = []
+        for field, value in filtered_data.items():
+            set_clauses.append(f"{field} = ?")
+            values.append(value)
+
+        values.append(user_id)
+        sql = f"UPDATE users SET {', '.join(set_clauses)} WHERE user_id = ?"
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(sql, values)
+            await db.commit()
+            return db.total_changes > 0
+
     # エントリー管理
     async def create_entry(self, entry: WorklogEntry) -> None:
         """エントリー作成"""

@@ -36,7 +36,9 @@ def register_worklog_reading_tools(
             # 呼び出し元ユーザー存在確認
             caller_user = await db.get_user(user_id)
             if not caller_user:
-                raise ValueError(f"ユーザーID '{user_id}' が見つかりません")
+                raise ValueError(
+                    f"ユーザーID '{user_id}' が見つかりません。最初にregister_userしてください。"
+                )
 
             # パラメータ検証
             if hours and count:
