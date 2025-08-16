@@ -507,6 +507,36 @@ body {
     color: #6c757d;
 }
 
+/* 指示フィールドの展開/折りたたみ */
+.expand-toggle {
+    cursor: pointer;
+    margin-left: 8px;
+    color: #6c757d;
+    font-size: 0.8em;
+    user-select: none;
+    transition: color 0.2s ease;
+}
+
+.expand-toggle:hover {
+    color: #495057;
+}
+
+.user-detail-content.collapsible .instruction-display {
+    display: block;
+}
+
+.user-detail-content.collapsible .instruction-full {
+    display: none;
+}
+
+.user-detail-content.collapsible:not(.collapsed) .instruction-display {
+    display: none;
+}
+
+.user-detail-content.collapsible:not(.collapsed) .instruction-full {
+    display: block;
+}
+
 .user-card-details {
     margin-bottom: 16px;
 }

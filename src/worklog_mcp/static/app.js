@@ -941,6 +941,53 @@ class SimpleWorklogViewer {
     // loadUsersData関数は削除されました - loadUsers()が両方の形式を処理するようになりました
     
     /**
+     * テキストを指定した長さで短縮
+     */
+    truncateText(text, maxLength) {
+        if (!text || text.length <= maxLength) return text;
+        return text.substring(0, maxLength);
+    }
+
+    /**
+     * テキストの改行を保持してフォーマット
+     */
+    formatTextWithBreaks(text) {
+        if (!text) return '';
+        return this.escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    /**
+     * 指示フィールドの展開/折りたたみ切り替え
+     */
+    toggleInstructionExpand(toggleElement, userId) {
+        const contentElement = document.querySelector(`.user-detail-content[data-field="instruction"][data-user-id="${userId}"]`);
+        if (!contentElement) return;
+        
+        const displayElement = contentElement.querySelector('.instruction-display');
+        const fullElement = contentElement.querySelector('.instruction-full');
+        
+        if (!displayElement || !fullElement) return;
+        
+        const isCollapsed = contentElement.classList.contains('collapsed');
+        
+        if (isCollapsed) {
+            // 展開
+            displayElement.style.display = 'none';
+            fullElement.style.display = 'block';
+            contentElement.classList.remove('collapsed');
+            toggleElement.textContent = '▲';
+            toggleElement.title = '折りたたみ';
+        } else {
+            // 折りたたみ
+            displayElement.style.display = 'block';
+            fullElement.style.display = 'none';
+            contentElement.classList.add('collapsed');
+            toggleElement.textContent = '▼';
+            toggleElement.title = '展開';
+        }
+    }
+    
+    /**
      * ユーザーカード要素を作成
      */
     async createUserCard(user) {
@@ -959,6 +1006,16 @@ class SimpleWorklogViewer {
         // 登録日時と最終アクティブ時間をフォーマット
         const createdDate = new Date(user.created_at);
         const lastActiveDate = new Date(user.last_active);
+        
+        // 指示フィールドの長さをチェック（改行含めて）
+        const instructionText = user.instruction || '';
+        const instructionLines = instructionText.split('\n').length;
+        const isLongInstruction = instructionText.length > 100 || instructionLines > 3;
+        
+        // 指示フィールドの表示用テキスト（短縮版）
+        const instructionDisplay = isLongInstruction ? 
+            this.truncateText(instructionText, 100) + '...' : 
+            instructionText || '未設定';
         
         card.innerHTML = `
             <div class="user-card-header">
@@ -992,9 +1049,14 @@ class SimpleWorklogViewer {
                     </div>
                 </div>
                 <div class="user-detail-section">
-                    <div class="user-detail-label">指示</div>
-                    <div class="user-detail-content" data-field="instruction" data-user-id="${user.user_id}">
-                        ${this.escapeHtml(user.instruction || '未設定')}
+                    <div class="user-detail-label">指示 ${isLongInstruction ? '<span class="expand-toggle" onclick="app.toggleInstructionExpand(this, \'' + user.user_id + '\')" title="展開/折りたたみ">▼</span>' : ''}</div>
+                    <div class="user-detail-content ${isLongInstruction ? 'collapsible collapsed' : ''}" data-field="instruction" data-user-id="${user.user_id}">
+                        <div class="instruction-display">
+                            ${this.formatTextWithBreaks(instructionDisplay)}
+                        </div>
+                        <div class="instruction-full" style="${isLongInstruction ? 'display: none;' : ''}">
+                            ${this.formatTextWithBreaks(instructionText || '未設定')}
+                        </div>
                         <span class="edit-icon" onclick="app.editUserField('${user.user_id}', 'instruction')" title="編集">✏️</span>
                     </div>
                 </div>
@@ -1192,6 +1254,14 @@ class SimpleWorklogViewer {
         const user = this.usersData.find(u => u.user_id === userId);
         if (!user) return;
 
+        // 指示フィールドの場合、編集前に展開する
+        if (fieldName === 'instruction' && contentElement.classList.contains('collapsed')) {
+            const toggleElement = document.querySelector(`.user-detail-label .expand-toggle`);
+            if (toggleElement) {
+                this.toggleInstructionExpand(toggleElement, userId);
+            }
+        }
+
         const currentValue = user[fieldName] || '';
         const fieldLabel = fieldName === 'personality' ? '性格・特徴' : 
                           fieldName === 'appearance' ? '外見・スタイル' : '指示';
@@ -1199,11 +1269,11 @@ class SimpleWorklogViewer {
         // 既に編集中の場合は何もしない
         if (contentElement.querySelector('.user-detail-input')) return;
 
-        // 編集用のテキストエリアを作成
+        // 編集用のテキストエリアを作成（改行は保持される）
         contentElement.innerHTML = `
             <textarea class="user-detail-input" 
                       placeholder="${fieldLabel}を入力してください..."
-                      data-original="${this.escapeHtml(currentValue)}">${this.escapeHtml(currentValue)}</textarea>
+                      data-original="${this.escapeHtml(currentValue)}">${currentValue}</textarea>
             <div class="user-detail-actions">
                 <button class="user-detail-save-btn" onclick="app.saveUserField('${userId}', '${fieldName}')">保存</button>
                 <button class="user-detail-cancel-btn" onclick="app.cancelEditUserField('${userId}', '${fieldName}')">キャンセル</button>
@@ -1288,10 +1358,49 @@ class SimpleWorklogViewer {
         if (!contentElement) return;
 
         const displayValue = value || '未設定';
-        contentElement.innerHTML = `
-            ${this.escapeHtml(displayValue)}
-            <span class="edit-icon" onclick="app.editUserField('${userId}', '${fieldName}')" title="編集">✏️</span>
-        `;
+        
+        if (fieldName === 'instruction') {
+            // 指示フィールドの場合は折りたたみ機能を維持
+            const instructionText = value || '';
+            const instructionLines = instructionText.split('\n').length;
+            const isLongInstruction = instructionText.length > 100 || instructionLines > 3;
+            
+            const instructionDisplay = isLongInstruction ? 
+                this.truncateText(instructionText, 100) + '...' : 
+                instructionText || '未設定';
+            
+            // 以前の折りたたみ状態を保持
+            const wasCollapsed = contentElement.classList.contains('collapsed');
+            
+            if (isLongInstruction) {
+                contentElement.classList.add('collapsible');
+                if (wasCollapsed) {
+                    contentElement.classList.add('collapsed');
+                }
+            } else {
+                contentElement.classList.remove('collapsible', 'collapsed');
+            }
+            
+            // キャンセル時は改行をそのまま保持（<br>に変換しない）
+            const displayText = instructionDisplay.replace(/\n/g, '\n');
+            const fullText = (instructionText || '未設定').replace(/\n/g, '\n');
+            
+            contentElement.innerHTML = `
+                <div class="instruction-display" style="white-space: pre-wrap;">
+                    ${displayText}
+                </div>
+                <div class="instruction-full" style="white-space: pre-wrap; ${isLongInstruction && wasCollapsed ? 'display: none;' : ''}">
+                    ${fullText}
+                </div>
+                <span class="edit-icon" onclick="app.editUserField('${userId}', '${fieldName}')" title="編集">✏️</span>
+            `;
+        } else {
+            // 他のフィールドは通常の表示
+            contentElement.innerHTML = `
+                ${this.formatTextWithBreaks(displayValue)}
+                <span class="edit-icon" onclick="app.editUserField('${userId}', '${fieldName}')" title="編集">✏️</span>
+            `;
+        }
     }
 }
 
