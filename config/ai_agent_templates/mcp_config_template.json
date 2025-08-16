@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "worklog": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "worklog_mcp", "--project", "{workspace_path}"],
+      "env": {
+        "WORKLOG_USER_ID": "{user_id}",
+        "WORKLOG_AGENT_MODE": "true",
+        "LLM_PROVIDER": "{provider}"
+      }
+    }
+  },
+  "agentConfig": {
+    "agent_id": "{agent_id}",
+    "user_id": "{user_id}",
+    "workspace_path": "{workspace_path}",
+    "provider": "{provider}",
+    "isolation_level": "process",
+    "resource_limits": {
+      "memory_mb": 512,
+      "cpu_percent": 50,
+      "disk_mb": 1024
+    },
+    "timeout_settings": {
+      "command_timeout": 300,
+      "session_timeout": 3600,
+      "idle_timeout": 1800
+    }
+  }
+}

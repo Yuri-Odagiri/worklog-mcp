@@ -2,7 +2,8 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from enum import Enum
 import uuid
 
 
@@ -82,3 +83,55 @@ class WorkSummary:
     issues: List[str] = field(default_factory=list)
     log_type_counts: dict = field(default_factory=dict)
     generated_at: datetime = field(default_factory=datetime.now)
+
+
+class SessionStatus(Enum):
+    """エージェントセッション状態"""
+
+    STARTING = "starting"
+    ACTIVE = "active"
+    IDLE = "idle"
+    STOPPING = "stopping"
+    STOPPED = "stopped"
+    ERROR = "error"
+
+
+@dataclass
+class AgentConfig:
+    """エージェント設定"""
+
+    agent_id: str
+    claude_model: str
+    system_prompt: str
+    allowed_tools: List[str]
+    mcp_servers: Dict[str, Any]
+    session_config: Dict[str, Any]
+    user_id: str
+    workspace_path: str = ""
+
+
+@dataclass
+class AgentSession:
+    """エージェントセッション"""
+
+    session_id: str = field(default_factory=generate_id)
+    agent_id: str = ""
+    user_id: str = ""
+    claude_process_id: str = ""
+    workspace_path: str = ""
+    mcp_config_path: str = ""
+    status: SessionStatus = SessionStatus.STARTING
+    created_at: datetime = field(default_factory=datetime.now)
+    last_activity: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class AgentExecutionResult:
+    """エージェント実行結果"""
+
+    session_id: str
+    command: str
+    output: str
+    error: Optional[str] = None
+    execution_time: float = 0.0
+    timestamp: datetime = field(default_factory=datetime.now)

@@ -1,0 +1,42 @@
+{
+  "claude": {
+    "model": "claude-3-5-sonnet-20241022",
+    "systemPrompt": "あなたは日本語で会話し、日本語でコードや文書を作成するAIアシスタントです。\n\n役割と専門性: {role_prompt}\n\n性格特性: {personality}\n行動指針: {personality_instructions}\n\nキャラクター設定: {appearance}\nコミュニケーションスタイル: {style_instructions}\n\n特別な指示: {custom_instructions}\n\n作業ログシステム連携: あなたは分報（作業ログ）システムと連携して動作します。\nユーザーの作業記録の作成、検索、分析を支援し、効率的な作業管理をサポートしてください。\n\n一貫性の保持: 会話を通じて、設定された人格、役割、コミュニケーションスタイルを一貫して保ってください。",
+    "tools": {
+      "allowed": [
+        "Read", "Write", "Edit", "Bash", "LS", "Glob", "Grep",
+        "TodoWrite", "WebSearch", "WebFetch"
+      ],
+      "permissionMode": "acceptEdits"
+    },
+    "mcp": {
+      "servers": {
+        "worklog": {
+          "command": "uv",
+          "args": ["run", "python", "-m", "worklog_mcp", "--project", "{workspace_path}"],
+          "env": {}
+        }
+      }
+    },
+    "session": {
+      "max_turns": 100,
+      "temperature": 0.1,
+      "max_tokens": 4096,
+      "timeout": 300
+    }
+  },
+  "openai": {
+    "model": "gpt-4",
+    "system_message": "あなたは日本語で会話し、日本語でコードや文書を作成するAIアシスタントです。役割: {role}、性格: {personality}、スタイル: {appearance}。{custom_instructions}",
+    "tools": [
+      "Read", "Write", "Edit", "Bash", "LS", "Glob", "Grep",
+      "TodoWrite", "WebSearch", "WebFetch"
+    ],
+    "parameters": {
+      "max_turns": 100,
+      "temperature": 0.2,
+      "max_tokens": 4000,
+      "timeout": 300
+    }
+  }
+}

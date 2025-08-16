@@ -730,7 +730,7 @@ class Database:
                 return {
                     "updated_count": 0,
                     "avatar_copied_count": 0,
-                    "error": "avatarsディレクトリが見つかりません"
+                    "error": "avatarsディレクトリが見つかりません",
                 }
 
             # プロジェクトのアバターディレクトリを取得
@@ -743,7 +743,7 @@ class Database:
                 return {
                     "updated_count": 0,
                     "avatar_copied_count": 0,
-                    "error": "project_contextが提供されていません"
+                    "error": "project_contextが提供されていません",
                 }
 
             updated_count = 0
@@ -798,7 +798,7 @@ class Database:
             result = {
                 "updated_count": updated_count,
                 "avatar_copied_count": avatar_copied_count,
-                "error": None
+                "error": None,
             }
 
             logger.info(
@@ -809,8 +809,4 @@ class Database:
 
         except Exception as e:
             logger.error(f"アバターパス更新処理でエラーが発生しました: {e}")
-            return {
-                "updated_count": 0,
-                "avatar_copied_count": 0,
-                "error": str(e)
-            }
+            return {"updated_count": 0, "avatar_copied_count": 0, "error": str(e)}
