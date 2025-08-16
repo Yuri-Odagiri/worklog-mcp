@@ -136,20 +136,21 @@ async def run_integrated_server(
             f"  - Webビューアー: http://localhost:{web_port} (プロセスID {web_process.pid})"
         )
 
-        # MCPサーバーをメインプロセスで実行
-        mcp = await create_server(db, project_context, event_bus)
+        # トランスポートに応じてサーバー実行
         logger.info(
             f"MCPサーバー起動 (プロジェクト: {project_context.get_project_name()})"
         )
-
-        # トランスポートに応じてサーバー実行
+        
         if transport == "stdio":
+            # stdioモードでは従来のFastMCPインスタンスを使用
+            mcp = await create_server(db, project_context, event_bus)
             await mcp.run_stdio_async()
         elif transport == "http":
-            from .sse_server import run_http_server
+            # httpモードでは専用のHTTPサーバーを起動
+            from .sse_server import run_http_server_with_context
 
-            await run_http_server(
-                mcp, host="127.0.0.1", port=8001
+            await run_http_server_with_context(
+                db, project_context, event_bus, host="127.0.0.1", port=8001
             )  # Webサーバーと重複しないポート
         else:
             raise ValueError(f"Unknown transport: {transport}")

@@ -78,20 +78,22 @@ async def run_mcp_server(project_path: str, transport: str = "http") -> None:
         event_bus = EventBus(event_bus_path)
         await event_bus.initialize()
 
-        # MCPサーバーの作成と実行
-        mcp = await create_server(db, project_context, event_bus)
-
         logger.info(
             f"MCPサーバー起動 (プロジェクト: {project_context.get_project_name()}, transport: {transport})"
         )
 
         # トランスポートに応じてサーバー実行
         if transport == "stdio":
+            # stdioモードでは従来のFastMCPインスタンスを使用
+            mcp = await create_server(db, project_context, event_bus)
             await mcp.run_stdio_async()
         elif transport == "http":
-            from .sse_server import run_http_server
+            # httpモードでは専用のHTTPサーバーを起動
+            from .sse_server import run_http_server_with_context
 
-            await run_http_server(mcp, host="127.0.0.1", port=8000)
+            await run_http_server_with_context(
+                db, project_context, event_bus, host="127.0.0.1", port=8001
+            )
         else:
             raise ValueError(f"Unknown transport: {transport}")
 
