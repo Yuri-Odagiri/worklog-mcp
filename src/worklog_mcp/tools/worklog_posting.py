@@ -2,7 +2,7 @@
 Worklog posting tools for the worklog MCP server.
 """
 
-from mcp import Context
+from mcp.server.fastmcp import Context
 from mcp.server.fastmcp import FastMCP
 
 from ..database import Database

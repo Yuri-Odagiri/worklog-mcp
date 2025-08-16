@@ -4,7 +4,7 @@ Worklog analytics tools for the worklog MCP server.
 
 from typing import Any, Dict, Optional
 
-from mcp import Context
+from mcp.server.fastmcp import Context
 from mcp.server.fastmcp import FastMCP
 
 from ..database import Database

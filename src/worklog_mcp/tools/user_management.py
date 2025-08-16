@@ -5,7 +5,7 @@ User management tools for the worklog MCP server.
 import re
 from typing import Any, Dict, List
 
-from mcp import Context
+from mcp.server.fastmcp import Context
 from mcp.server.fastmcp import FastMCP
 
 from ..database import Database
