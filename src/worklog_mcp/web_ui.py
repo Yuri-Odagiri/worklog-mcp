@@ -250,41 +250,82 @@ class WebUIServer:
                     )
 
                 delete_option = body.get("delete_option", "worklogs_only")
-                include_users = delete_option == "full_reset"
 
-                logger.debug(
-                    f"削除オプション: {delete_option}, ユーザー削除: {include_users}"
-                )
+                logger.debug(f"削除オプション: {delete_option}")
 
-                # 新しいtruncate_allメソッドを使用
-                avatar_dir = (
-                    self.project_context.get_avatar_path() if include_users else None
-                )
-                logger.debug(f"アバターディレクトリ: {avatar_dir}")
+                # 完全リセットの場合は新しいメソッドを使用
+                if delete_option == "full_reset":
+                    result = await self.db_adapter.db.full_project_reset(
+                        self.project_context
+                    )
+                    logger.debug(f"完全リセット結果: {result}")
 
-                result = await self.db_adapter.db.truncate_all(
-                    include_users=include_users, avatar_dir=avatar_dir
-                )
-                logger.debug(f"削除結果: {result}")
+                    # クライアントに完全リセット通知
+                    await self.notify_clients(
+                        "entries_truncated",
+                        {
+                            "deleted_count": "全データ",
+                            "users_deleted": "全ユーザー",
+                            "avatars_deleted": "全アバター",
+                            "eventbus_deleted": result["eventbus_deleted"],
+                            "jobqueue_deleted": result["jobqueue_deleted"],
+                            "project_directory_deleted": result[
+                                "project_directory_deleted"
+                            ],
+                            "delete_option": delete_option,
+                        },
+                    )
 
-                # クライアントに全削除通知
-                await self.notify_clients(
-                    "entries_truncated",
-                    {
-                        "deleted_count": result["entries_deleted"],
-                        "users_deleted": result["users_deleted"],
-                        "avatars_deleted": result["avatars_deleted"],
-                        "delete_option": delete_option,
-                    },
-                )
+                    if result["project_directory_deleted"]:
+                        message = "プロジェクトを完全にリセットしました（全データ、DB、EventBus、JobQueue、画像を削除）"
+                    else:
+                        message = "プロジェクトのリセットに失敗しました"
 
-                message = f"{result['entries_deleted']} 件の分報を削除しました"
-                if include_users and result["users_deleted"] > 0:
-                    message += f"（{result['users_deleted']} 件のユーザー情報も削除）"
-                if include_users and result["avatars_deleted"] > 0:
-                    message += f"（{result['avatars_deleted']} 件のアバター画像も削除）"
+                    return {
+                        "success": result["project_directory_deleted"],
+                        "message": message,
+                        "result": result,
+                    }
+                else:
+                    # 従来の動作（分報のみまたは分報+ユーザー）
+                    include_users = delete_option == "users_and_worklogs"
 
-                return {"success": True, "message": message, "result": result}
+                    # 新しいtruncate_allメソッドを使用
+                    avatar_dir = (
+                        self.project_context.get_avatar_path()
+                        if include_users
+                        else None
+                    )
+                    logger.debug(f"アバターディレクトリ: {avatar_dir}")
+
+                    result = await self.db_adapter.db.truncate_all(
+                        include_users=include_users, avatar_dir=avatar_dir
+                    )
+                    logger.debug(f"削除結果: {result}")
+
+                    # クライアントに全削除通知
+                    await self.notify_clients(
+                        "entries_truncated",
+                        {
+                            "deleted_count": result["entries_deleted"],
+                            "users_deleted": result["users_deleted"],
+                            "avatars_deleted": result["avatars_deleted"],
+                            "delete_option": delete_option,
+                        },
+                    )
+
+                    message = f"{result['entries_deleted']} 件の分報を削除しました"
+                    if include_users and result["users_deleted"] > 0:
+                        message += (
+                            f"（{result['users_deleted']} 件のユーザー情報も削除）"
+                        )
+                    if include_users and result["avatars_deleted"] > 0:
+                        message += (
+                            f"（{result['avatars_deleted']} 件のアバター画像も削除）"
+                        )
+
+                    return {"success": True, "message": message, "result": result}
+
             except Exception as e:
                 logger.error(f"API Error in truncate_entries: {type(e).__name__}: {e}")
                 logger.debug("truncate_entries エラー詳細", exc_info=True)

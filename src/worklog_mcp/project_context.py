@@ -1,9 +1,12 @@
 """プロジェクトコンテキスト管理"""
 
 import os
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -141,6 +144,33 @@ class ProjectContext:
             "database_path": self.get_database_path(),
             "config_file_exists": False,  # 設定ファイルは使用しない
         }
+
+    def delete_project_directory(self) -> bool:
+        """プロジェクトディレクトリ全体を削除
+
+        Returns:
+            bool: 削除に成功した場合True、失敗またはディレクトリが存在しない場合False
+        """
+        import shutil
+
+        project_dir = self._get_project_dir()
+
+        if not project_dir.exists():
+            logger.info(f"プロジェクトディレクトリが存在しません: {project_dir}")
+            return False
+
+        try:
+            # ディレクトリ全体を削除
+            shutil.rmtree(project_dir)
+            logger.info(f"プロジェクトディレクトリを削除しました: {project_dir}")
+
+            # フラグをリセット
+            self._directories_created = False
+
+            return True
+        except Exception as e:
+            logger.error(f"プロジェクトディレクトリの削除に失敗: {project_dir} - {e}")
+            return False
 
 
 class ProjectContextError(Exception):

@@ -301,6 +301,42 @@ class Database:
                 "users_truncated": include_users,
             }
 
+    async def full_project_reset(self, project_context) -> dict:
+        """プロジェクト全体の完全リセット（DB、EventBus、JobQueue、ディレクトリ全削除）
+
+        Args:
+            project_context: ProjectContextインスタンス
+
+        Returns:
+            dict: 削除結果の詳細
+        """
+        # まずデータベースを閉じる
+        await self.close()
+
+        # プロジェクトディレクトリを削除
+        deleted = project_context.delete_project_directory()
+
+        if deleted:
+            return {
+                "entries_deleted": 0,  # ディレクトリごと削除なので正確な数は不明
+                "users_deleted": 0,
+                "avatars_deleted": 0,
+                "eventbus_deleted": True,
+                "jobqueue_deleted": True,
+                "project_directory_deleted": True,
+                "users_truncated": True,
+            }
+        else:
+            return {
+                "entries_deleted": 0,
+                "users_deleted": 0,
+                "avatars_deleted": 0,
+                "eventbus_deleted": False,
+                "jobqueue_deleted": False,
+                "project_directory_deleted": False,
+                "users_truncated": False,
+            }
+
     async def get_timeline(
         self,
         user_id: Optional[str] = None,
