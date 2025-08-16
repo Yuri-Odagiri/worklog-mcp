@@ -797,7 +797,6 @@ class SimpleWorklogViewer {
         }
         
         // 通知表示
-        const user = this.getUserById(user_id);
         const userName = user?.name || user_id;
         this.showNotification(`${userName} のアバターが AI生成版に更新されました`);
     }
@@ -824,7 +823,6 @@ class SimpleWorklogViewer {
         }
         
         // 通知表示
-        const user = this.getUserById(user_id);
         const userName = user?.name || user_id;
         const fieldNames = Object.keys(updated_fields).map(f => 
             f === 'personality' ? '性格・特徴' : '外見・スタイル'
