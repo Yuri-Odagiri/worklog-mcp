@@ -167,3 +167,6 @@ ARCHITECTURE.md
 DATABASE_ERD.md
 DESIGN_SPEC.md
 MCP_TOOLS_IMPLEMENTATION.md
+
+# Playwright MCP
+.playwright-mcp/
