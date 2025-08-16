@@ -6,12 +6,13 @@ Model Context Protocol (MCP) を使用した分報管理サーバー + Webビュ
 
 分報MCPサーバーは、リアルタイムの作業ログ（分報）の記録・管理・検索機能をAIアシスタントに提供するPythonパッケージです。`uvx`コマンドで簡単に起動でき、複数ユーザーの細かい作業記録を時系列で管理します。
 
-**NEW**: 完全独立アーキテクチャ！MCPサーバーとWebビューアーが分離され、それぞれ個別起動可能になりました！
+**NEW**: Agent MCP統合！Claude Code Agent管理機能を提供する完全独立MCPサーバーを追加実装しました！
 
 ## 特徴
 
 - 🚀 **簡単起動**: `uvx`コマンドで環境を汚さずに実行
-- 🔧 **独立アーキテクチャ**: MCPサーバーとWebビューアーを個別または統合で起動可能
+- 🔧 **統合サーバー**: MCPサーバー・Webビューアー・Agent MCP・ジョブワーカーの4サービス統合管理
+- 🤖 **Agent MCP**: Claude Code Agent管理専用の独立MCPサーバー（HTTP transport）
 - 🌐 **Webビューアー**: ブラウザでのリアルタイム分報閲覧（独立起動対応）
 - 🔄 **プロセス間通信**: SQLiteベースのイベントバスによる非同期通信
 - 🏗️ **プロジェクト分離**: プロジェクト単位での完全なデータ分離
@@ -27,11 +28,11 @@ Model Context Protocol (MCP) を使用した分報管理サーバー + Webビュ
 
 ### 起動方法の選択
 
-分報MCPサーバーは3つの方法で起動できます：
+分報MCPサーバーは複数の方法で起動できます：
 
-1. **MCPサーバーのみ**: Claude Desktop等からMCP経由でのみ利用
-2. **Webビューアーのみ**: ブラウザでの閲覧専用
-3. **統合起動**: MCPサーバーとWebビューアーを同時起動（推奨）
+1. **統合起動（推奨）**: 4サービス（MCP・Web・Agent MCP・ジョブワーカー）一括起動
+2. **個別起動**: 必要なサービスのみ選択起動
+3. **Agent MCP単体**: Claude Code Agent管理専用サーバー
 
 ### 方法1: 開発モード（最も簡単）
 
@@ -45,16 +46,29 @@ cd worklog-mcp
 # 依存関係のインストール
 uv sync
 
-# === 起動方法の選択 ===
+# === 統合起動（推奨） ===
 
-# 1. MCPサーバーのみ起動
+# 4サービス統合起動（MCP・Web・Agent MCP・ジョブワーカー）
+./scripts/start-all.sh .
+
+# === 個別起動 ===
+
+# 1. MCPサーバーのみ
 uv run python -m worklog_mcp.mcp_server --project .
 
-# 2. Webビューアーのみ起動
+# 2. Webビューアーのみ
 uv run python -m worklog_mcp.web_server --project . --port 8080
 
-# 3. 統合起動（推奨）
-uv run python -m worklog_mcp --project . --web-port 8080
+# 3. Agent MCPサーバーのみ
+uv run python -m worklog_agent_mcp --project . --transport http --port 8002
+
+# === 管理コマンド ===
+
+# 状態確認
+./scripts/status.sh
+
+# 全停止
+./scripts/stop-all.sh
 ```
 
 ### 方法2: uvxでの実行（配布用）
@@ -183,10 +197,11 @@ MCPサーバー → イベントバス → Webビューアー → ブラウザ
 
 #### アクセス方法
 
-Webビューアー起動後、以下のURLでアクセス可能：
+統合サーバー起動後、以下のURLでアクセス可能：
 
 - **Webビューアー**: `http://localhost:8080`
 - **MCPサーバー (Streamable HTTP)**: `http://localhost:8001/mcp`
+- **Agent MCPサーバー**: `http://localhost:8002/mcp` 🆕
 - **REST API**: `http://localhost:8080/api/*`
 - **SSEストリーム**: `http://localhost:8080/events`
 
@@ -203,6 +218,11 @@ Webビューアー起動後、以下のURLでアクセス可能：
 #### 起動例
 
 ```bash
+# === 統合起動（推奨） ===
+
+# 4サービス統合起動
+./scripts/start-all.sh .
+
 # === 個別起動 ===
 
 # MCPサーバーのみ（バックグラウンド）
@@ -211,8 +231,8 @@ uv run python -m worklog_mcp.mcp_server --project . &
 # Webビューアーのみ
 uv run python -m worklog_mcp.web_server --project . --port 8080
 
-# === 統合起動（推奨） ===
-uv run python -m worklog_mcp --project . --web-port 8080
+# Agent MCPサーバーのみ
+./scripts/start-agent-mcp.sh .
 ```
 
 ## プロジェクト分離機能
@@ -265,6 +285,52 @@ uvx worklog-mcp
 - **イベントバス**: `{WORKLOG_BASE_PATH}/{project_name}/eventbus.db`
 - **プロジェクト名**: `--project`で指定したパス（未指定時は現在のディレクトリ）から自動生成
 
+## Agent MCP機能 🆕
+
+### Agent MCP概要
+
+Agent MCPは、Claude Code Agent管理を専門とする完全独立MCPサーバーです：
+
+- **独立アーキテクチャ**: 分報MCPとは完全分離
+- **HTTP Transport**: Streamable HTTPでリモートMCP対応
+- **エージェント管理**: Claude Code Agentの起動・停止・監視
+- **セッション管理**: エージェントセッションの永続化
+- **統合管理**: 統合サーバーで一括起動・停止可能
+
+### Agent MCP起動
+
+```bash
+# === 個別起動 ===
+
+# Agent MCPサーバーのみ起動
+./scripts/start-agent-mcp.sh .
+
+# 状態確認
+./scripts/status-agent-mcp.sh
+
+# 停止
+./scripts/stop-agent-mcp.sh
+
+# === 統合起動（推奨） ===
+
+# 4サービス統合起動（分報MCP + Agent MCP + Web + ジョブワーカー）
+./scripts/start-all.sh .
+```
+
+### Agent MCP設定
+
+Claude CodeでAgent MCPサーバーを利用：
+
+```json
+{
+  "mcpServers": {
+    "worklog-agent": {
+      "url": "http://127.0.0.1:8002/mcp"
+    }
+  }
+}
+```
+
 ## Claude Desktop での設定
 
 ### MCP設定（推奨）
@@ -274,11 +340,14 @@ Claude DesktopでMCPサーバーとして利用する場合：
 #### 方法1: Claude Code (推奨)
 
 ```bash
-# MCPサーバーのみ（stdio）
+# 分報MCPサーバー（stdio）
 claude mcp add worklog-stdio -- uv run python -m worklog_mcp.mcp_server --project . --transport stdio
 
-# MCPサーバー（Streamable HTTP）
+# 分報MCPサーバー（Streamable HTTP）
 claude mcp add --transport http worklog http://127.0.0.1:8001/mcp --command "uv run python -m worklog_mcp.mcp_server --project . --transport http"
+
+# Agent MCPサーバー（リモートMCP）
+claude mcp add --transport http worklog-agent http://127.0.0.1:8002/mcp
 
 # Gitリポジトリから直接追加（統合サーバー）
 claude mcp add --transport http worklog http://127.0.0.1:8001/mcp --command "uvx --from git+https://github.com/Yuri-Odagiri/worklog-mcp.git worklog-mcp"
@@ -521,6 +590,36 @@ read_timeline "my-user-id" target_user_id="other-user-id"
 
 ## 開発・テスト
 
+### 統合管理スクリプト 🆕
+
+4サービス（MCP・Web・Agent MCP・ジョブワーカー）の統合管理：
+
+```bash
+# === 統合管理 ===
+
+# 4サービス統合起動
+./scripts/start-all.sh /path/to/project [webポート] [agentポート]
+
+# 全サービス状態確認（エンドポイントテスト付き）
+./scripts/status.sh
+
+# 全サービス停止
+./scripts/stop-all.sh
+
+# === 個別管理 ===
+
+# Agent MCP個別管理
+./scripts/start-agent-mcp.sh /path/to/project
+./scripts/status-agent-mcp.sh
+./scripts/stop-agent-mcp.sh
+
+# MCP・Web個別管理
+./scripts/start-mcp.sh /path/to/project
+./scripts/start-web.sh /path/to/project
+./scripts/stop-mcp.sh
+./scripts/stop-web.sh
+```
+
 ### データベーススクリプト
 
 プロジェクト用のデータベース初期化・ダミーデータ投入スクリプトが利用可能です：
@@ -627,12 +726,13 @@ curl -N http://localhost:8080/events
 - **リアルタイム通信**: Server-Sent Events (SSE)
 - **静的ファイル**: HTML/CSS/JavaScript (Vanilla)
 
-### 新アーキテクチャ
-- **独立プロセス**: MCPサーバーとWebビューアーが完全分離
+### 統合アーキテクチャ 🆕
+- **4サービス統合**: MCP・Web・Agent MCP・ジョブワーカーの統合管理
+- **Agent MCP**: Claude Code Agent専用の完全独立MCPサーバー
 - **MCPトランスポート**: Streamable HTTP (デフォルト) / stdio
 - **プロセス間通信**: SQLiteベースのイベントバス
 - **通知システム**: MCP投稿 → イベントバス → SSE → Webクライアント即座更新
-- **統合起動**: 便利用として両プロセスを自動管理
+- **統合管理**: 管理スクリプトによる一括プロセス制御
 
 ## API仕様
 
@@ -672,6 +772,16 @@ curl -N http://localhost:8080/events
 | `get_user_stats` | 統計情報 | `user_id`, `target_user_id` |
 | `get_team_status` | チーム状況 | `user_id` |
 | `list_users` | ユーザー一覧 | `user_id` |
+
+### Agent MCP ツール 🆕
+
+| ツール名 | 説明 | パラメータ |
+|---------|------|-----------|
+| `start_claude_agent` | Claude Agent起動 | `user_id`, `agent_id?`, `workspace_path?`, `custom_prompt?` |
+| `stop_claude_agent` | Claude Agent停止 | `session_id` |
+| `list_agent_sessions` | エージェントセッション一覧 | `user_id?`, `status_filter?` |
+| `execute_with_agent` | エージェントコマンド実行 | `session_id`, `command`, `timeout?` |
+| `get_session_status` | セッション状態取得 | `session_id` |
 
 ## セキュリティ
 
