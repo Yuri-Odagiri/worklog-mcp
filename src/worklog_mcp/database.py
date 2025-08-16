@@ -711,3 +711,106 @@ class Database:
 
         except Exception as e:
             logger.error(f"エージェントインポート処理でエラーが発生しました: {e}")
+
+    async def update_missing_avatar_paths(self, project_context=None) -> dict:
+        """既存ユーザーで欠けているアバターパスを更新する"""
+        try:
+            import shutil
+            from pathlib import Path
+
+            # example-agentディレクトリのパスを取得
+            current_dir = Path(__file__).parent.parent.parent
+            example_agent_dir = current_dir / "example-agent"
+            example_avatar_dir = example_agent_dir / "avatars"
+
+            if not example_avatar_dir.exists():
+                logger.warning(
+                    f"example-agentのavatarsディレクトリが見つかりません: {example_avatar_dir}"
+                )
+                return {
+                    "updated_count": 0,
+                    "avatar_copied_count": 0,
+                    "error": "avatarsディレクトリが見つかりません"
+                }
+
+            # プロジェクトのアバターディレクトリを取得
+            target_avatar_dir = None
+            if project_context:
+                target_avatar_dir = Path(project_context.get_avatar_path())
+                target_avatar_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                logger.warning("project_contextが提供されていません")
+                return {
+                    "updated_count": 0,
+                    "avatar_copied_count": 0,
+                    "error": "project_contextが提供されていません"
+                }
+
+            updated_count = 0
+            avatar_copied_count = 0
+
+            async with aiosqlite.connect(self.db_path) as db:
+                # avatar_pathが空またはNullのユーザーを取得
+                cursor = await db.execute(
+                    "SELECT user_id, name FROM users WHERE avatar_path IS NULL OR avatar_path = ''"
+                )
+                users_without_avatar = await cursor.fetchall()
+
+                for user_id, name in users_without_avatar:
+                    # アバターファイル名のパターンを確認
+                    possible_avatar_names = [
+                        f"{user_id}_ai.png",
+                        f"{user_id}.png",
+                        f"{user_id}_avatar.png",
+                    ]
+
+                    avatar_path = None
+                    for avatar_name in possible_avatar_names:
+                        source_avatar = example_avatar_dir / avatar_name
+                        if source_avatar.exists():
+                            target_avatar = target_avatar_dir / avatar_name
+                            try:
+                                shutil.copy2(source_avatar, target_avatar)
+                                avatar_path = str(target_avatar)
+                                avatar_copied_count += 1
+                                logger.info(
+                                    f"アバターファイルをコピー: {source_avatar} -> {target_avatar}"
+                                )
+                                break
+                            except Exception as e:
+                                logger.warning(
+                                    f"アバターファイルのコピーに失敗: {source_avatar} -> {e}"
+                                )
+
+                    # アバターパスを更新
+                    if avatar_path:
+                        await db.execute(
+                            "UPDATE users SET avatar_path = ? WHERE user_id = ?",
+                            (avatar_path, user_id),
+                        )
+                        updated_count += 1
+                        logger.info(
+                            f"ユーザー {user_id} ({name}) のアバターパスを更新: {avatar_path}"
+                        )
+
+                await db.commit()
+
+            result = {
+                "updated_count": updated_count,
+                "avatar_copied_count": avatar_copied_count,
+                "error": None
+            }
+
+            logger.info(
+                f"アバターパス更新完了: {updated_count}人のユーザー, {avatar_copied_count}個のアバターをコピー"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"アバターパス更新処理でエラーが発生しました: {e}")
+            return {
+                "updated_count": 0,
+                "avatar_copied_count": 0,
+                "error": str(e)
+            }
