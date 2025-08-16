@@ -256,12 +256,21 @@ class EventBusPoller:
                 # 未処理イベントを取得
                 events = await self.event_bus.consume(limit=50)
 
-                # イベントをコールバックで処理
+                # イベントを並行処理でコールバックに送信
+                tasks = []
                 for event in events:
+                    task = asyncio.create_task(self._process_event(callback, event))
+                    tasks.append(task)
+
+                # 全タスクの完了を待機（タイムアウト付き）
+                if tasks:
                     try:
-                        await callback(event["event_type"], event["data"])
-                    except Exception as e:
-                        logger.error(f"イベント処理エラー: {e}")
+                        await asyncio.wait_for(
+                            asyncio.gather(*tasks, return_exceptions=True),
+                            timeout=30.0,  # 30秒でタイムアウト
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("一部のイベント処理がタイムアウトしました")
 
                 # 定期的にクリーンアップ（1時間に1回程度）
                 if asyncio.get_event_loop().time() % 3600 < self.poll_interval:
@@ -272,3 +281,10 @@ class EventBusPoller:
 
             # 次のポーリングまで待機
             await asyncio.sleep(self.poll_interval)
+
+    async def _process_event(self, callback, event) -> None:
+        """個別イベントの処理"""
+        try:
+            await callback(event["event_type"], event["data"])
+        except Exception as e:
+            logger.error(f"イベント処理エラー ({event['event_type']}): {e}")

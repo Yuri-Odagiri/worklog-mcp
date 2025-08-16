@@ -3,8 +3,8 @@
 
 echo "🛑 worklog-mcpプロセスを停止中..."
 
-# worklog-mcpプロセスを検索
-PROCS=$(ps aux | grep "worklog_mcp" | grep -v grep | awk '{print $2}')
+# worklog-mcpとジョブワーカープロセスを検索
+PROCS=$(ps aux | grep -E "(worklog_mcp|job_worker_daemon)" | grep -v grep | awk '{print $2}')
 
 if [ -z "$PROCS" ]; then
     echo "✅ 停止対象のプロセスが見つかりません"
@@ -12,7 +12,7 @@ if [ -z "$PROCS" ]; then
 fi
 
 echo "📋 停止対象プロセス:"
-ps aux | grep "worklog_mcp" | grep -v grep | awk '{print "  PID " $2 ": " $0}'
+ps aux | grep -E "(worklog_mcp|job_worker_daemon)" | grep -v grep | awk '{print "  PID " $2 ": " $0}'
 
 # プロセスを停止
 for PID in $PROCS; do
@@ -23,7 +23,7 @@ done
 # 5秒待機後、強制終了が必要かチェック
 sleep 5
 
-REMAINING=$(ps aux | grep "worklog_mcp" | grep -v grep | awk '{print $2}')
+REMAINING=$(ps aux | grep -E "(worklog_mcp|job_worker_daemon)" | grep -v grep | awk '{print $2}')
 if [ ! -z "$REMAINING" ]; then
     echo "⚠️  一部プロセスが残存しています。強制終了中..."
     for PID in $REMAINING; do
@@ -34,7 +34,7 @@ if [ ! -z "$REMAINING" ]; then
 fi
 
 # 最終確認
-FINAL_CHECK=$(ps aux | grep "worklog_mcp" | grep -v grep)
+FINAL_CHECK=$(ps aux | grep -E "(worklog_mcp|job_worker_daemon)" | grep -v grep)
 if [ -z "$FINAL_CHECK" ]; then
     echo "✅ 全てのworklog-mcpプロセスが停止されました"
 else

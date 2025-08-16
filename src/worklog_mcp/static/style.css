@@ -509,6 +509,53 @@ body {
     color: #495057;
 }
 
+/* ユーザーカードアクション */
+.user-card-actions {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: center;
+}
+
+.regenerate-avatar-btn {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #6f42c1, #e83e8c);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(111, 66, 193, 0.2);
+}
+
+.regenerate-avatar-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(111, 66, 193, 0.3);
+    background: linear-gradient(135deg, #5a37a3, #d43d7a);
+}
+
+.regenerate-avatar-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.regenerate-avatar-btn.loading {
+    animation: pulse 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+    from {
+        opacity: 0.6;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
 /* レスポンシブ対応 */
 @media (max-width: 768px) {
     .users-grid {

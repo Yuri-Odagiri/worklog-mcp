@@ -140,7 +140,7 @@ async def run_integrated_server(
         logger.info(
             f"MCPサーバー起動 (プロジェクト: {project_context.get_project_name()})"
         )
-        
+
         if transport == "stdio":
             # stdioモードでは従来のFastMCPインスタンスを使用
             mcp = await create_server(db, project_context, event_bus)

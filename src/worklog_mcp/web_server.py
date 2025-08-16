@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from worklog_mcp.database import Database
 from worklog_mcp.event_bus import EventBus, EventBusPoller
+from worklog_mcp.job_queue import JobQueue
 from worklog_mcp.logging_config import setup_logging
 from worklog_mcp.project_context import ProjectContext
 from worklog_mcp.web_ui import WebUIServer
@@ -67,13 +68,18 @@ async def run_web_server(project_path: str, host: str, port: int) -> None:
     db = Database(db_path)
     await db.initialize()
 
-    # Webサーバー作成
-    web_server = WebUIServer(db, project_context)
-
     # イベントバスの初期化
     event_bus_path = project_context.get_eventbus_database_path()
     event_bus = EventBus(event_bus_path)
     await event_bus.initialize()
+
+    # ジョブキューの初期化（ジョブ追加のみ）
+    job_queue_path = project_context._get_project_dir() / "jobs.db"
+    job_queue = JobQueue(job_queue_path)
+    await job_queue.initialize()
+
+    # Webサーバー作成（ジョブキューとイベントバスを渡す）
+    web_server = WebUIServer(db, project_context, job_queue, event_bus)
 
     # イベントポーラーの設定と開始
     poller = EventBusPoller(event_bus, poll_interval=0.5)
@@ -82,95 +88,25 @@ async def run_web_server(project_path: str, host: str, port: int) -> None:
     async def handle_event(event_type: str, data: dict):
         """イベントバスからのイベントを処理"""
         try:
-            # user_registeredイベントの場合、アバター生成を実行
+            # user_registeredイベントの場合、アバター生成ジョブをキューに追加
             if event_type == "user_registered":
-                await handle_user_registered(data, db, project_context, web_server)
+                await job_queue.enqueue(
+                    "avatar_generation",
+                    {
+                        "user_id": data["user_id"],
+                        "name": data["name"],
+                        "role": data["role"],
+                        "personality": data["personality"],
+                        "appearance": data["appearance"],
+                        "theme_color": data["theme_color"],
+                    },
+                )
+                logger.info(f"アバター生成ジョブをキューに追加: {data['user_id']}")
 
-            # 通常のWebSocket通知も継続
+            # 通常のWebSocket通知（即座に実行）
             await web_server.notify_clients(event_type, data)
         except Exception as e:
             logger.error(f"イベント処理エラー: {e}")
-
-    async def handle_user_registered(
-        user_data: dict,
-        db: Database,
-        project_context: ProjectContext,
-        web_server: WebUIServer,
-    ):
-        """user_registeredイベントを処理してアバター生成を実行"""
-        try:
-            user_id = user_data["user_id"]
-            name = user_data["name"]
-            role = user_data["role"]
-            personality = user_data["personality"]
-            appearance = user_data["appearance"]
-            theme_color = user_data["theme_color"]
-
-            logger.info(
-                f"ユーザー '{user_id}' のアバター生成を開始します（ビューアーサーバー側）"
-            )
-
-            # 非同期でAIアバター生成を開始（バックグラウンド処理）
-            import asyncio
-
-            asyncio.create_task(
-                generate_ai_avatar_for_user(
-                    name,
-                    role,
-                    personality,
-                    appearance,
-                    theme_color,
-                    user_id,
-                    project_context,
-                    db,
-                    web_server,
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"アバター生成処理エラー: {e}")
-
-    async def generate_ai_avatar_for_user(
-        name: str,
-        role: str,
-        personality: str,
-        appearance: str,
-        theme_color: str,
-        user_id: str,
-        project_context: ProjectContext,
-        db: Database,
-        web_server: WebUIServer,
-    ):
-        """ユーザーのAIアバターを生成してデータベースとUIを更新"""
-        try:
-            from worklog_mcp.avatar_generator import generate_openai_avatar
-
-            # OpenAI APIでアバター生成を試行
-            avatar_path = await generate_openai_avatar(
-                name, role, personality, appearance, user_id, project_context
-            )
-
-            if avatar_path:
-                # AI生成が成功した場合のみデータベース更新と通知を実行
-                await db.update_user_avatar_path(user_id, avatar_path)
-
-                # WebSocket経由でクライアントに通知
-                await web_server.notify_clients(
-                    "avatar_updated",
-                    {"user_id": user_id, "avatar_path": avatar_path},
-                )
-
-                logger.info(
-                    f"ユーザー '{user_id}' のAI生成アバターが完了し、更新されました: {avatar_path}"
-                )
-            else:
-                logger.info(
-                    f"ユーザー '{user_id}' のAI生成に失敗しました。動的アバターが継続使用されます。"
-                )
-
-        except Exception as e:
-            logger.error(f"AI アバター生成エラー (user_id: {user_id}): {e}")
-            logger.debug("AI アバター生成エラー詳細", exc_info=True)
 
     # ポーリング開始
     await poller.start(handle_event)
@@ -189,6 +125,7 @@ async def run_web_server(project_path: str, host: str, port: int) -> None:
     finally:
         # クリーンアップ
         await poller.stop()
+        await job_queue.close()
         await event_bus.close()
         await db.close()
 

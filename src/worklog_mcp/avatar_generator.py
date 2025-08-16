@@ -98,6 +98,9 @@ async def generate_openai_avatar(
         # プロジェクト専用のアバターディレクトリパスを取得
         avatar_dir = Path(project_context.get_avatar_path())
 
+        # ディレクトリが存在しない場合は作成
+        avatar_dir.mkdir(parents=True, exist_ok=True)
+
         avatar_path = avatar_dir / f"{user_id}_ai.png"
         logger.debug(f"アバター保存先: {avatar_path}")
 

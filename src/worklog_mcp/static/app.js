@@ -7,15 +7,21 @@ class SimpleWorklogViewer {
         this.currentUserSearch = '';
         this.currentTab = 'worklogs';
         this.usersData = [];
+        this.loadingUsers = false;
         this.init();
     }
     
     async init() {
         try {
-            await this.loadUsers();
-            await this.load();
+            // SSEを最初に接続してリアルタイムイベントを受信開始
             this.setupSSE();
             this.setupKeyboardShortcuts();
+            
+            // 初期データのロードは並行して実行（SSEをブロックしない）
+            await Promise.all([
+                this.loadUsers(),
+                this.load()
+            ]);
         } catch (error) {
             this.showError('初期化に失敗しました: ' + error.message);
         }
@@ -137,9 +143,18 @@ class SimpleWorklogViewer {
     async render() {
         const container = document.getElementById('entries-container');
         
-        // ユーザーデータが空の場合は再読み込み
-        if (Object.keys(this.users).length === 0) {
-            await this.loadUsers();
+        // ユーザーデータが空の場合は非ブロッキングで再読み込み
+        if (Object.keys(this.users).length === 0 && !this.loadingUsers) {
+            this.loadingUsers = true;
+            // ブロッキングを避けるため、バックグラウンドで読み込み
+            this.loadUsers().then(() => {
+                this.loadingUsers = false;
+                // ユーザーデータ読み込み完了後に再描画
+                this.render();
+            }).catch(error => {
+                this.loadingUsers = false;
+                console.error('ユーザーデータ読み込みエラー:', error);
+            });
         }
         
         // サマリ情報を更新
@@ -181,8 +196,9 @@ class SimpleWorklogViewer {
         // テーマカラーを淡い色に変換
         const lightColor = this.getThemeColorStyle(themeColor);
         
-        // アバター画像URLを構築
-        const avatarUrl = this.getAvatarUrl(entry.user_avatar_path || '', entry.user_id);
+        // アバター画像URLを構築（ユーザー情報からアバターパスを取得）
+        const userAvatarPath = user ? user.avatar_path : null;
+        const avatarUrl = this.getAvatarUrl(userAvatarPath || '', entry.user_id);
         
         div.innerHTML = `
             <img src="${avatarUrl}" alt="${this.escapeHtml(userName)}" class="avatar" 
@@ -628,8 +644,8 @@ class SimpleWorklogViewer {
             this.users[user_id].avatar_path = avatar_path;
         }
         
-        // 表示中の全ての該当ユーザーのアバター画像を更新
-        const avatarElements = document.querySelectorAll(`img.avatar[data-user-id="${user_id}"]`);
+        // 表示中の全ての該当ユーザーのアバター画像を更新（分報とユーザーカード両方）
+        const avatarElements = document.querySelectorAll(`img.avatar[data-user-id="${user_id}"], img.user-card-avatar[data-user-id="${user_id}"]`);
         const newAvatarUrl = this.getAvatarUrl(avatar_path, user_id);
         
         avatarElements.forEach(img => {
@@ -643,6 +659,25 @@ class SimpleWorklogViewer {
                 img.style.transition = 'opacity 0.3s ease';
             };
         });
+        
+        // ユーザーカードのアバター画像も更新（クラス名が違う場合）
+        const userCardAvatars = document.querySelectorAll(`.user-card-avatar[alt*="${user_id}"]`);
+        userCardAvatars.forEach(img => {
+            img.src = newAvatarUrl;
+            img.style.opacity = '0.5';
+            img.onload = () => {
+                img.style.opacity = '1';
+                img.style.transition = 'opacity 0.3s ease';
+            };
+        });
+        
+        // 再生成ボタンの状態をリセット
+        const button = document.querySelector(`.regenerate-avatar-btn[data-user-id="${user_id}"]`);
+        if (button) {
+            button.disabled = false;
+            button.textContent = '🎨 画像再生成';
+            button.classList.remove('loading');
+        }
         
         // 通知表示
         const userName = this.users[user_id]?.name || user_id;
@@ -839,6 +874,15 @@ class SimpleWorklogViewer {
                     </div>
                 ` : ''}
             </div>
+            
+            <div class="user-card-actions">
+                <button class="regenerate-avatar-btn" 
+                        onclick="app.regenerateUserAvatar('${user.user_id}')" 
+                        data-user-id="${user.user_id}"
+                        title="AIでアバター画像を再生成">
+                    🎨 画像再生成
+                </button>
+            </div>
         `;
         
         return card;
@@ -866,6 +910,58 @@ class SimpleWorklogViewer {
             todayPosts: todayPosts,
             lastPostTime: lastPostTime
         };
+    }
+    
+    /**
+     * ユーザーのアバターを個別に再生成
+     */
+    async regenerateUserAvatar(userId) {
+        const button = document.querySelector(`.regenerate-avatar-btn[data-user-id="${userId}"]`);
+        if (!button) return;
+        
+        // ボタンを無効化してローディング状態に
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = '🔄 生成中...';
+        button.classList.add('loading');
+        
+        try {
+            const response = await fetch(`/api/users/${userId}/regenerate-avatar`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || `HTTP ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            // 成功メッセージを表示
+            this.showNotification(result.message || 'アバター再生成を開始しました');
+            
+            // ボタンを一時的に「処理中...」状態に
+            button.textContent = '⏳ 処理中...';
+            
+            // 30秒後にボタンを元に戻す（SSEで更新されない場合のフォールバック）
+            setTimeout(() => {
+                button.disabled = false;
+                button.textContent = originalText;
+                button.classList.remove('loading');
+            }, 30000);
+            
+        } catch (error) {
+            console.error('アバター再生成エラー:', error);
+            alert('アバター再生成に失敗しました: ' + error.message);
+            
+            // エラー時はすぐにボタンを元に戻す
+            button.disabled = false;
+            button.textContent = originalText;
+            button.classList.remove('loading');
+        }
     }
 }
 
