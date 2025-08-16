@@ -35,6 +35,11 @@ def parse_args():
         default=8080,
         help="Webサーバーポート（デフォルト: 8080）",
     )
+    parser.add_argument(
+        "--mcp-only",
+        action="store_true",
+        help="MCPサーバーのみを起動（Webサーバーなし）",
+    )
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
     return parser.parse_args()
 
@@ -65,12 +70,22 @@ def get_execution_command(env_type: str, module: str, args: list):
         return [sys.executable, "-m", module] + args
 
 
-async def run_integrated_server(project_path: str, web_port: int = 8080):
-    """MCPサーバーとWebビューアーを独立プロセスで統合起動"""
-    import subprocess
+async def run_mcp_only_server(project_path: str):
+    """MCPサーバー単体を起動"""
+    from .mcp_server import run_mcp_server
+    
+    logger.info("MCPサーバー単体モードで起動")
+    await run_mcp_server(project_path)
 
-    # プロセス管理用
-    mcp_process = None
+
+async def run_integrated_server(project_path: str, web_port: int = 8080):
+    """MCPサーバー（メインプロセス）+ Webサーバー（別プロセス）の統合起動"""
+    import subprocess
+    from .database import Database
+    from .event_bus import EventBus
+    from .project_context import ProjectContext
+    from .server import create_server
+
     web_process = None
 
     try:
@@ -78,19 +93,26 @@ async def run_integrated_server(project_path: str, web_port: int = 8080):
         env_type = detect_execution_environment()
         logger.info(f"実行環境を検出: {env_type}")
 
-        # MCPサーバープロセス起動
-        mcp_cmd = get_execution_command(
-            env_type,
-            "worklog_mcp.mcp_server",
-            ["--project", project_path]
-        )
-        logger.info(f"MCPサーバープロセス起動: {' '.join(mcp_cmd)}")
-        mcp_process = subprocess.Popen(
-            mcp_cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        # プロジェクトコンテキストの初期化
+        project_context = ProjectContext(project_path)
+        project_context.initialize_project_directories()
+
+        # データベースの初期化
+        db_path = project_context.get_database_path()
+        db = Database(db_path)
+        await db.initialize()
+
+        # 初回起動チェック
+        if await db.is_first_run():
+            project_info = project_context.get_project_info()
+            logger.info(
+                f"プロジェクト '{project_info['project_name']}' の初回起動を検出しました。ユーザー登録が必要です。"
+            )
+
+        # イベントバスの初期化
+        event_bus_path = project_context.get_eventbus_database_path()
+        event_bus = EventBus(event_bus_path)
+        await event_bus.initialize()
 
         # Webサーバープロセス起動
         web_cmd = get_execution_command(
@@ -102,39 +124,23 @@ async def run_integrated_server(project_path: str, web_port: int = 8080):
         web_process = subprocess.Popen(web_cmd)
 
         logger.info("統合サーバーが起動しました:")
-        logger.info(f"  - MCPサーバー: プロセスID {mcp_process.pid}")
-        logger.info(
-            f"  - Webビューアー: http://localhost:{web_port} (プロセスID {web_process.pid})"
-        )
+        logger.info("  - MCPサーバー: メインプロセス (stdio通信)")
+        logger.info(f"  - Webビューアー: http://localhost:{web_port} (プロセスID {web_process.pid})")
 
-        # プロセス監視
-        while True:
-            # MCPプロセスの状態確認
-            if mcp_process.poll() is not None:
-                logger.error("MCPサーバープロセスが終了しました")
-                break
-
-            # Webプロセスの状態確認
-            if web_process.poll() is not None:
-                logger.error("Webサーバープロセスが終了しました")
-                break
-
-            await asyncio.sleep(1)
+        # MCPサーバーをメインプロセスで実行
+        mcp = await create_server(db, project_context, event_bus)
+        logger.info(f"MCPサーバー起動 (プロジェクト: {project_context.get_project_name()})")
+        
+        # stdio通信でMCPサーバー実行
+        await mcp.run_stdio_async()
 
     except KeyboardInterrupt:
         logger.info("統合サーバーを停止しています...")
-
+    except Exception as e:
+        logger.error(f"統合サーバーエラー: {e}")
+        raise
     finally:
-        # プロセス終了処理
-        if mcp_process and mcp_process.poll() is None:
-            logger.info("MCPサーバープロセスを終了中...")
-            mcp_process.terminate()
-            try:
-                mcp_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                logger.warning("MCPサーバープロセスの強制終了")
-                mcp_process.kill()
-
+        # Webプロセス終了処理
         if web_process and web_process.poll() is None:
             logger.info("Webサーバープロセスを終了中...")
             web_process.terminate()
@@ -144,11 +150,17 @@ async def run_integrated_server(project_path: str, web_port: int = 8080):
                 logger.warning("Webサーバープロセスの強制終了")
                 web_process.kill()
 
+        # クリーンアップ
+        if "event_bus" in locals():
+            await event_bus.close()
+        if "db" in locals():
+            await db.close()
+
         logger.info("統合サーバーが停止されました")
 
 
 def main():
-    """統合起動用メインエントリーポイント"""
+    """メインエントリーポイント"""
     try:
         args = parse_args()
 
@@ -162,15 +174,20 @@ def main():
                 f"プロジェクトモードで開始（現在のディレクトリ）: {project_path}"
             )
 
-        # 統合サーバー起動（MCPとWebの両方）
-        logger.info(f"統合サーバー起動（Web: http://localhost:{args.web_port}）")
-        asyncio.run(run_integrated_server(project_path, args.web_port))
+        if args.mcp_only:
+            # MCPサーバー単体モード
+            logger.info("MCPサーバー単体モード")
+            asyncio.run(run_mcp_only_server(project_path))
+        else:
+            # 統合サーバーモード（MCP + Web）
+            logger.info(f"統合サーバー起動（Web: http://localhost:{args.web_port}）")
+            asyncio.run(run_integrated_server(project_path, args.web_port))
 
     except KeyboardInterrupt:
-        logger.info("統合サーバーが停止されました (KeyboardInterrupt)")
+        logger.info("サーバーが停止されました (KeyboardInterrupt)")
         sys.exit(0)
     except Exception as e:
-        logger.error(f"統合サーバーエラー: {e}")
+        logger.error(f"サーバーエラー: {e}")
         sys.exit(1)
 
 
