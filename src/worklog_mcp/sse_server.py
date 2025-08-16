@@ -23,40 +23,20 @@ class HTTPServer:
     async def run(self):
         """HTTPサーバーを起動"""
         import uvicorn
-        from starlette.applications import Starlette
-        from starlette.middleware.cors import CORSMiddleware
-        from starlette.routing import Mount
         
         logger.info(f"HTTPサーバーを起動中... http://{self.host}:{self.port}")
         logger.info("エンドポイント:")
         logger.info(f"  - Streamable HTTP: http://{self.host}:{self.port}/mcp")
 
-        # FastMCPのStreamable HTTPアプリケーションを取得
-        mcp_app = self.mcp_server.streamable_http_app()
-        
-        # Starletteアプリケーションを作成してMCPアプリをマウント
-        app = Starlette(
-            routes=[
-                Mount("/mcp", app=mcp_app),
-            ]
-        )
+        # FastMCPのStreamable HTTPアプリケーションを直接使用
+        app = self.mcp_server.streamable_http_app()
 
-        # CORS設定
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=["*"],  # 本番環境では適切に制限する
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
+        # FastMCPアプリが自身でライフサイクルを管理するため、手動起動は不要
+        config = uvicorn.Config(
+            app=app, host=self.host, port=self.port, log_level="info"
         )
-
-        # FastMCPセッションマネージャーのlifespanと共にサーバー実行
-        async with self.mcp_server.session_manager.run():
-            config = uvicorn.Config(
-                app=app, host=self.host, port=self.port, log_level="info"
-            )
-            server = uvicorn.Server(config)
-            await server.serve()
+        server = uvicorn.Server(config)
+        await server.serve()
 
 
 async def run_http_server(
