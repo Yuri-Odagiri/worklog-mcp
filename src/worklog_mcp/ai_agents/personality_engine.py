@@ -1,16 +1,31 @@
 """
-PersonalityEngine - 人格一貫性保持とプロンプト生成エンジン
+PersonalityEngine - 人格一貫性保持とプロンプト生成エンジン（テンプレートシステム対応）
 """
 
-from typing import Dict, Any, List
+import yaml
+from typing import Dict, Any, List, Optional
+from pathlib import Path
 from ..models import User
 
 
 class PersonalityEngine:
     """人格設定からシステムプロンプト生成とキャラクター一貫性管理"""
 
-    def __init__(self):
-        # 役割別のベースプロンプトテンプレート
+    def __init__(self, template_path: Optional[str] = None):
+        """
+        PersonalityEngine初期化
+        
+        Args:
+            template_path: カスタムテンプレートファイルのパス
+        """
+        # デフォルトテンプレートパス
+        if template_path is None:
+            template_path = Path(__file__).parent.parent.parent / "config" / "agent_templates" / "personality_prompts.yaml"
+        
+        self.template_path = Path(template_path)
+        self.templates = self._load_templates()
+        
+        # レガシーサポート用の静的テンプレート（YAMLが使用できない場合のフォールバック）
         self.role_templates = {
             "developer": "あなたは経験豊富なソフトウェア開発者です。コードの品質と効率性を重視し、ベストプラクティスに従って開発を行います。",
             "designer": "あなたはクリエイティブなデザイナーです。ユーザビリティとデザインの美しさを追求し、直感的なインターフェースの作成を得意とします。",
@@ -37,8 +52,147 @@ class PersonalityEngine:
             "落ち着いた": "冷静で安定した口調で、信頼感のあるコミュニケーションを行います。",
         }
 
-    def build_system_prompt(self, user: User) -> str:
-        """ユーザー設定から包括的なシステムプロンプトを生成"""
+    def _load_templates(self) -> Dict[str, Any]:
+        """YAMLテンプレートファイルを読み込み"""
+        try:
+            if self.template_path.exists():
+                with open(self.template_path, 'r', encoding='utf-8') as f:
+                    return yaml.safe_load(f)
+            else:
+                print(f"警告: テンプレートファイルが見つかりません: {self.template_path}")
+                return {}
+        except Exception as e:
+            print(f"警告: テンプレートファイルの読み込みに失敗しました: {e}")
+            return {}
+
+    def build_system_prompt(self, user: User, model: str = "claude") -> str:
+        """テンプレートシステムを使用してユーザー設定から包括的なシステムプロンプトを生成"""
+        if self.templates:
+            return self._build_template_based_prompt(user, model)
+        else:
+            return self._build_legacy_prompt(user)
+
+    def _build_template_based_prompt(self, user: User, model: str = "claude") -> str:
+        """YAMLテンプレートを使用したプロンプト生成"""
+        base_template = self.templates.get("base_templates", {}).get("system_prompt", "")
+        
+        # 変数置換用のコンテキスト作成
+        context = {
+            "user_name": user.name,
+            "role": user.role,
+            "personality": user.personality,
+            "appearance": user.appearance,
+            "instruction": user.instruction,
+            "model": model,
+            "role_section": self._generate_role_section(user.role),
+            "personality_section": self._generate_personality_section(user.personality),
+            "appearance_section": self._generate_appearance_section(user.appearance),
+            "instruction_section": self._generate_instruction_section(user.instruction),
+            "worklog_integration": self._get_template_section("integration_templates", "worklog_system"),
+            "consistency_rules": self._get_consistency_rules(model)
+        }
+        
+        # 条件分岐ロジックの適用
+        context = self._apply_conditional_logic(context, user)
+        
+        # テンプレート変数の置換
+        return self._substitute_variables(base_template, context)
+
+    def _generate_role_section(self, role: str) -> str:
+        """役割セクションの生成"""
+        if not role:
+            return ""
+            
+        role_templates = self.templates.get("role_templates", {})
+        role_key = role.lower()
+        
+        if role_key in role_templates:
+            return role_templates[role_key]
+        else:
+            # フォールバック
+            return self._generate_role_prompt(role)
+
+    def _generate_personality_section(self, personality: str) -> str:
+        """性格セクションの生成"""
+        if not personality:
+            return ""
+            
+        personality_templates = self.templates.get("personality_templates", {})
+        personality_parts = []
+        
+        for trait, template in personality_templates.items():
+            if trait in personality:
+                personality_parts.append(template)
+        
+        if personality_parts:
+            return f"性格特性: {personality}\n" + " ".join(personality_parts)
+        else:
+            # フォールバック
+            return self._generate_personality_prompt(personality)
+
+    def _generate_appearance_section(self, appearance: str) -> str:
+        """外見セクションの生成"""
+        if not appearance:
+            return ""
+            
+        appearance_templates = self.templates.get("appearance_templates", {})
+        appearance_parts = []
+        
+        for style, template in appearance_templates.items():
+            if style in appearance:
+                appearance_parts.append(template)
+        
+        if appearance_parts:
+            return f"外見・スタイル: {appearance}\n" + " ".join(appearance_parts)
+        else:
+            # フォールバック
+            return self._generate_style_prompt(appearance)
+
+    def _generate_instruction_section(self, instruction: str) -> str:
+        """指示セクションの生成"""
+        if not instruction:
+            return ""
+        return f"特別な指示: {instruction}"
+
+    def _get_template_section(self, section_name: str, subsection_name: str) -> str:
+        """テンプレートセクションの取得"""
+        section = self.templates.get(section_name, {})
+        return section.get(subsection_name, "")
+
+    def _get_consistency_rules(self, model: str) -> str:
+        """一貫性ルールの取得"""
+        consistency = self.templates.get("consistency_rules", {})
+        base_rules = consistency.get("base", "")
+        model_specific = consistency.get("model_specific", {}).get(model, "")
+        
+        if model_specific:
+            return f"{base_rules}\n\n{model_specific}"
+        return base_rules
+
+    def _apply_conditional_logic(self, context: Dict[str, str], user: User) -> Dict[str, str]:
+        """シンプルな条件分岐（文字列マッチングのみ）"""
+        # 複雑なルールベース処理は削除し、シンプルな文字列マッチングのみ
+        return context
+
+    def _substitute_variables(self, template: str, context: Dict[str, str]) -> str:
+        """テンプレート変数の置換"""
+        result = template
+        for key, value in context.items():
+            placeholder = f"{{{key}}}"
+            result = result.replace(placeholder, value or "")
+        
+        # 空の行や不要な空白を整理
+        lines = result.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped or (cleaned_lines and cleaned_lines[-1]):  # 空行の連続を避ける
+                cleaned_lines.append(line)
+        
+        return '\n'.join(cleaned_lines)
+
+    def _build_legacy_prompt(self, user: User) -> str:
+        """レガシーなプロンプト生成（YAMLテンプレートが使用できない場合）"""
         prompt_sections = []
 
         # 基本的なAIの設定
@@ -73,6 +227,28 @@ class PersonalityEngine:
         prompt_sections.append(self._get_consistency_prompt())
 
         return "\n\n".join(prompt_sections)
+
+    # シンプルなユーティリティ機能
+
+
+
+    def get_template_variables(self) -> List[str]:
+        """使用可能なテンプレート変数一覧を取得"""
+        return [
+            "user_name", "role", "personality", "appearance", "instruction", "model",
+            "role_section", "personality_section", "appearance_section", "instruction_section",
+            "worklog_integration", "consistency_rules"
+        ]
+
+
+    def reload_templates(self) -> bool:
+        """テンプレートファイルの再読み込み"""
+        try:
+            self.templates = self._load_templates()
+            return True
+        except Exception as e:
+            print(f"テンプレート再読み込みエラー: {e}")
+            return False
 
     def _get_base_ai_config(self) -> str:
         """基本的なAI設定"""

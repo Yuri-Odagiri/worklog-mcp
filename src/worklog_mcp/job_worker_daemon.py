@@ -103,7 +103,6 @@ class JobWorkerDaemon:
             role = payload["role"]
             personality = payload["personality"]
             appearance = payload["appearance"]
-            theme_color = payload["theme_color"]
 
             logger.info(f"アバター生成ジョブ開始: {user_id}")
 

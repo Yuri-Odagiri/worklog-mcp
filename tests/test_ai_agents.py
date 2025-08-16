@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 import tempfile
-from worklog_mcp.models import User, AgentConfig
+from worklog_mcp.models import User, AgentConfig, ConversationHistory, ConversationMessage, MessageRole
 from worklog_mcp.ai_agents.user_config_converter import UserConfigConverter
 from worklog_mcp.ai_agents.personality_engine import PersonalityEngine
 
@@ -188,8 +188,9 @@ class TestPersonalityEngine:
         assert "笑顔" in prompt
         assert "落ち着いた" in prompt
         assert "具体例を示して" in prompt
-        assert "作業ログシステム" in prompt
-        assert "一貫性の保持" in prompt
+        # YAMLテンプレートまたはレガシープロンプトのいずれかに含まれるかチェック
+        assert ("作業ログシステム" in prompt or "分報" in prompt)
+        assert ("一貫性の保持" in prompt or "一貫した" in prompt)
 
     def test_generate_role_prompt(self):
         """役割プロンプト生成テスト"""
@@ -273,3 +274,122 @@ class TestPersonalityEngine:
         
         # 詳細が不足している場合は提案が含まれる
         assert len(suggestions["missing_elements"]) > 0 or len(suggestions["enhancement_ideas"]) > 0
+
+
+class TestConversationModels:
+    """会話データモデルのテスト"""
+
+    def test_conversation_message_creation(self):
+        """ConversationMessageの作成テスト"""
+        message = ConversationMessage(
+            session_id="test_session",
+            role=MessageRole.USER,
+            content="Hello, how are you?",
+            metadata={"source": "test"}
+        )
+        
+        assert message.session_id == "test_session"
+        assert message.role == MessageRole.USER
+        assert message.content == "Hello, how are you?"
+        assert message.metadata["source"] == "test"
+        assert message.message_id  # UUID should be generated
+
+    def test_conversation_history_management(self):
+        """ConversationHistoryの管理テスト"""
+        history = ConversationHistory(session_id="test_session")
+        
+        # メッセージ追加
+        user_msg = history.add_message(MessageRole.USER, "Hello")
+        assistant_msg = history.add_message(MessageRole.ASSISTANT, "Hi there!")
+        
+        assert len(history.messages) == 2
+        assert history.messages[0] == user_msg
+        assert history.messages[1] == assistant_msg
+        
+        # 最新メッセージ取得
+        recent = history.get_recent_messages(1)
+        assert len(recent) == 1
+        assert recent[0].content == "Hi there!"
+        
+        # 履歴クリア
+        history.clear_history()
+        assert len(history.messages) == 0
+
+    def test_message_role_enum(self):
+        """MessageRole enumのテスト"""
+        assert MessageRole.USER.value == "user"
+        assert MessageRole.ASSISTANT.value == "assistant"
+        assert MessageRole.SYSTEM.value == "system"
+
+
+class TestConversationIntegration:
+    """会話機能統合テスト"""
+
+    def setup_method(self):
+        """テストセットアップ"""
+        self.test_user = User(
+            user_id="conversation_test_user",
+            name="会話テストユーザー",
+            role="assistant",
+            personality="親しみやすく丁寧な対応をします。",
+            appearance="温かい笑顔で対話します。"
+        )
+
+    def test_conversation_history_context_building(self):
+        """会話履歴からのコンテキスト構築テスト"""
+        from worklog_mcp.llm_integration.agent_executor import AgentExecutor
+        from worklog_mcp.ai_agents.user_config_converter import UserConfigConverter
+        
+        # エージェント設定作成
+        converter = UserConfigConverter()
+        agent_config = converter.convert_user_to_agent_config(self.test_user)
+        
+        # AgentExecutor作成
+        executor = AgentExecutor(agent_config, "claude")
+        
+        # 会話履歴作成
+        history = ConversationHistory(session_id="test_session")
+        history.add_message(MessageRole.USER, "私の名前は田中です")
+        history.add_message(MessageRole.ASSISTANT, "こんにちは、田中さん！")
+        history.add_message(MessageRole.USER, "今日の天気はどうですか？")
+        
+        # コンテキスト構築テスト
+        context = executor._build_conversation_context(history)
+        
+        assert "ユーザー: 私の名前は田中です" in context
+        assert "アシスタント: こんにちは、田中さん！" in context
+        assert "ユーザー: 今日の天気はどうですか？" in context
+
+    def test_conversation_history_limit(self):
+        """会話履歴の制限テスト"""
+        history = ConversationHistory(session_id="test_session")
+        
+        # 15個のメッセージを追加
+        for i in range(15):
+            history.add_message(MessageRole.USER, f"Message {i}")
+        
+        # 最新10件のみ取得
+        recent = history.get_recent_messages(10)
+        assert len(recent) == 10
+        assert recent[0].content == "Message 5"  # 最新10件の最初
+        assert recent[-1].content == "Message 14"  # 最新10件の最後
+
+    def test_message_metadata_handling(self):
+        """メッセージメタデータの処理テスト"""
+        history = ConversationHistory(session_id="test_session")
+        
+        metadata = {
+            "execution_time": 1.5,
+            "token_count": 150,
+            "provider": "claude"
+        }
+        
+        message = history.add_message(
+            MessageRole.ASSISTANT, 
+            "こんにちは！",
+            metadata=metadata
+        )
+        
+        assert message.metadata["execution_time"] == 1.5
+        assert message.metadata["token_count"] == 150
+        assert message.metadata["provider"] == "claude"

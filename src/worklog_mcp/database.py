@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from .models import User, WorklogEntry
+from .models import User, WorklogEntry, AgentSession, AgentExecutionResult, ConversationMessage, SessionStatus, MessageRole
 from .logging_config import setup_logging
 
 # ログ設定を確実に初期化
@@ -87,12 +87,67 @@ class Database:
             )
         """)
 
+        # エージェントセッションテーブル
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS agent_sessions (
+                session_id TEXT PRIMARY KEY,
+                agent_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                claude_process_id TEXT,
+                workspace_path TEXT,
+                mcp_config_path TEXT,
+                status TEXT DEFAULT 'starting' CHECK(status IN ('starting', 'active', 'idle', 'stopping', 'stopped', 'error')),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+
+        # エージェント実行結果テーブル
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS agent_execution_results (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                command TEXT NOT NULL,
+                output TEXT,
+                error TEXT,
+                execution_time REAL DEFAULT 0.0,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES agent_sessions(session_id)
+            )
+        """)
+
+        # 会話履歴テーブル
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS conversation_messages (
+                message_id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
+                content TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                metadata_json TEXT,
+                FOREIGN KEY (session_id) REFERENCES agent_sessions(session_id)
+            )
+        """)
+
         # インデックス作成
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_entries_user_id ON entries(user_id)"
         )
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_entries_created_at ON entries(created_at)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_agent_sessions_user_id ON agent_sessions(user_id)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_agent_sessions_status ON agent_sessions(status)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_execution_results_session_id ON agent_execution_results(session_id)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_conversation_messages_session_id ON conversation_messages(session_id)"
         )
         # idx_entries_relatedインデックスは削除されました（related_entry_idカラムと一緒に）
 
@@ -810,3 +865,208 @@ class Database:
         except Exception as e:
             logger.error(f"アバターパス更新処理でエラーが発生しました: {e}")
             return {"updated_count": 0, "avatar_copied_count": 0, "error": str(e)}
+
+    # エージェントセッション管理
+    async def create_agent_session(self, session: AgentSession) -> None:
+        """エージェントセッション作成"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """INSERT INTO agent_sessions 
+                (session_id, agent_id, user_id, claude_process_id, workspace_path, 
+                 mcp_config_path, status, created_at, last_activity) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    session.session_id,
+                    session.agent_id,
+                    session.user_id,
+                    session.claude_process_id,
+                    session.workspace_path,
+                    session.mcp_config_path,
+                    session.status.value,
+                    session.created_at,
+                    session.last_activity,
+                ),
+            )
+            await db.commit()
+
+    async def get_agent_session(self, session_id: str) -> Optional[AgentSession]:
+        """エージェントセッション取得"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """SELECT session_id, agent_id, user_id, claude_process_id, workspace_path, 
+                          mcp_config_path, status, created_at, last_activity 
+                   FROM agent_sessions WHERE session_id = ?""",
+                (session_id,),
+            )
+            row = await cursor.fetchone()
+            if row:
+                return AgentSession(
+                    session_id=row[0],
+                    agent_id=row[1],
+                    user_id=row[2],
+                    claude_process_id=row[3],
+                    workspace_path=row[4],
+                    mcp_config_path=row[5],
+                    status=SessionStatus(row[6]),
+                    created_at=datetime.fromisoformat(row[7]) if isinstance(row[7], str) else row[7],
+                    last_activity=datetime.fromisoformat(row[8]) if isinstance(row[8], str) else row[8],
+                )
+            return None
+
+    async def update_agent_session_status(self, session_id: str, status: SessionStatus) -> None:
+        """エージェントセッション状態更新"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE agent_sessions SET status = ?, last_activity = ? WHERE session_id = ?",
+                (status.value, datetime.now(), session_id),
+            )
+            await db.commit()
+
+    async def update_agent_session_process_id(self, session_id: str, process_id: str) -> None:
+        """エージェントセッションのプロセスID更新"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE agent_sessions SET claude_process_id = ?, last_activity = ? WHERE session_id = ?",
+                (process_id, datetime.now(), session_id),
+            )
+            await db.commit()
+
+    async def list_agent_sessions(self, user_id: Optional[str] = None, status: Optional[SessionStatus] = None) -> List[AgentSession]:
+        """エージェントセッション一覧取得"""
+        query = """SELECT session_id, agent_id, user_id, claude_process_id, workspace_path, 
+                          mcp_config_path, status, created_at, last_activity 
+                   FROM agent_sessions WHERE 1=1"""
+        params = []
+
+        if user_id:
+            query += " AND user_id = ?"
+            params.append(user_id)
+
+        if status:
+            query += " AND status = ?"
+            params.append(status.value)
+
+        query += " ORDER BY created_at DESC"
+
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+            return [
+                AgentSession(
+                    session_id=row[0],
+                    agent_id=row[1],
+                    user_id=row[2],
+                    claude_process_id=row[3],
+                    workspace_path=row[4],
+                    mcp_config_path=row[5],
+                    status=SessionStatus(row[6]),
+                    created_at=datetime.fromisoformat(row[7]) if isinstance(row[7], str) else row[7],
+                    last_activity=datetime.fromisoformat(row[8]) if isinstance(row[8], str) else row[8],
+                )
+                for row in rows
+            ]
+
+    async def delete_agent_session(self, session_id: str) -> None:
+        """エージェントセッション削除"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # 関連する実行結果と会話履歴も削除
+            await db.execute("DELETE FROM conversation_messages WHERE session_id = ?", (session_id,))
+            await db.execute("DELETE FROM agent_execution_results WHERE session_id = ?", (session_id,))
+            await db.execute("DELETE FROM agent_sessions WHERE session_id = ?", (session_id,))
+            await db.commit()
+
+    # エージェント実行結果管理
+    async def save_execution_result(self, result: AgentExecutionResult) -> None:
+        """エージェント実行結果保存"""
+        import uuid
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """INSERT INTO agent_execution_results 
+                (id, session_id, command, output, error, execution_time, timestamp) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(uuid.uuid4()),
+                    result.session_id,
+                    result.command,
+                    result.output,
+                    result.error,
+                    result.execution_time,
+                    result.timestamp,
+                ),
+            )
+            await db.commit()
+
+    async def get_execution_history(self, session_id: str, limit: int = 50) -> List[AgentExecutionResult]:
+        """エージェント実行履歴取得"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """SELECT id, session_id, command, output, error, execution_time, timestamp 
+                   FROM agent_execution_results 
+                   WHERE session_id = ? 
+                   ORDER BY timestamp DESC 
+                   LIMIT ?""",
+                (session_id, limit),
+            )
+            rows = await cursor.fetchall()
+            return [
+                AgentExecutionResult(
+                    session_id=row[1],
+                    command=row[2],
+                    output=row[3],
+                    error=row[4],
+                    execution_time=row[5],
+                    timestamp=datetime.fromisoformat(row[6]) if isinstance(row[6], str) else row[6],
+                )
+                for row in rows
+            ]
+
+    # 会話履歴管理
+    async def save_conversation_message(self, message: ConversationMessage) -> None:
+        """会話メッセージ保存"""
+        import json
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """INSERT INTO conversation_messages 
+                (message_id, session_id, role, content, timestamp, metadata_json) 
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    message.message_id,
+                    message.session_id,
+                    message.role.value,
+                    message.content,
+                    message.timestamp,
+                    json.dumps(message.metadata) if message.metadata else None,
+                ),
+            )
+            await db.commit()
+
+    async def get_conversation_history(self, session_id: str, limit: int = 100) -> List[ConversationMessage]:
+        """会話履歴取得"""
+        import json
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """SELECT message_id, session_id, role, content, timestamp, metadata_json 
+                   FROM conversation_messages 
+                   WHERE session_id = ? 
+                   ORDER BY timestamp ASC 
+                   LIMIT ?""",
+                (session_id, limit),
+            )
+            rows = await cursor.fetchall()
+            return [
+                ConversationMessage(
+                    message_id=row[0],
+                    session_id=row[1],
+                    role=MessageRole(row[2]),
+                    content=row[3],
+                    timestamp=datetime.fromisoformat(row[4]) if isinstance(row[4], str) else row[4],
+                    metadata=json.loads(row[5]) if row[5] else {},
+                )
+                for row in rows
+            ]
+
+    async def clear_conversation_history(self, session_id: str) -> None:
+        """会話履歴クリア"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM conversation_messages WHERE session_id = ?", (session_id,))
+            await db.commit()

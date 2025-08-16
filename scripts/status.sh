@@ -7,11 +7,13 @@ echo "=================================="
 # プロセス検索
 MCP_PROCS=$(ps aux | grep "worklog_mcp.*--transport http" | grep -v grep)
 WEB_PROCS=$(ps aux | grep "worklog_mcp.web_server" | grep -v grep)
-ALL_PROCS=$(ps aux | grep "worklog_mcp" | grep -v grep)
+AGENT_PROCS=$(ps aux | grep "worklog_agent_mcp" | grep -v grep)
+ALL_PROCS=$(ps aux | grep "worklog_mcp\|worklog_agent_mcp" | grep -v grep)
 
 # ポート使用状況確認
 MCP_PORT_STATUS=$(lsof -i :8001 2>/dev/null)
 WEB_PORT_STATUS=$(lsof -i :8080 2>/dev/null)
+AGENT_PORT_STATUS=$(lsof -i :8002 2>/dev/null)
 
 # MCPサーバー状態
 echo ""
@@ -105,6 +107,60 @@ else
     fi
 fi
 
+# Agent MCPサーバー状態
+echo ""
+echo "🤖 Agent MCP サーバー (ポート 8002)"
+echo "--------------------------------"
+if [ ! -z "$AGENT_PROCS" ]; then
+    echo "✅ 実行中"
+    echo "$AGENT_PROCS" | while read line; do
+        PID=$(echo "$line" | awk '{print $2}')
+        USER=$(echo "$line" | awk '{print $1}')
+        CPU=$(echo "$line" | awk '{print $3}')
+        MEM=$(echo "$line" | awk '{print $4}')
+        START=$(echo "$line" | awk '{print $9}')
+        CMD=$(echo "$line" | awk '{for(i=11;i<=NF;i++) printf "%s ", $i}')
+        echo "  📊 PID: $PID | CPU: $CPU% | MEM: $MEM% | 開始: $START"
+        echo "  📂 コマンド: $CMD"
+        
+        # プロジェクトパスを抽出
+        PROJECT_PATH=$(echo "$CMD" | grep -o -- "--project [^ ]*" | cut -d' ' -f2)
+        if [ ! -z "$PROJECT_PATH" ]; then
+            echo "  📁 プロジェクト: $PROJECT_PATH"
+        fi
+        
+        # ポート番号を抽出
+        PORT_NUM=$(echo "$CMD" | grep -o -- "--port [^ ]*" | cut -d' ' -f2)
+        if [ ! -z "$PORT_NUM" ]; then
+            echo "  🔌 ポート: $PORT_NUM"
+        fi
+    done
+    
+    # Agent MCP エンドポイントテスト
+    echo "  🌐 エンドポイント接続テスト..."
+    AGENT_ENDPOINT_TEST=$(curl -s -X POST http://127.0.0.1:8002/mcp \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json, text/event-stream" \
+        -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"status-check","version":"1.0.0"}}}' \
+        --max-time 5 2>/dev/null)
+    
+    if echo "$AGENT_ENDPOINT_TEST" | grep -q "protocolVersion"; then
+        echo "  ✅ Agent MCPエンドポイント正常"
+        AGENT_VERSION=$(echo "$AGENT_ENDPOINT_TEST" | grep -o '"protocolVersion":"[^"]*"' | cut -d'"' -f4)
+        AGENT_SERVER_NAME=$(echo "$AGENT_ENDPOINT_TEST" | grep -o '"name":"[^"]*"' | cut -d'"' -f4)
+        echo "  📋 サーバー名: $AGENT_SERVER_NAME"
+        echo "  🔖 プロトコル版: $AGENT_VERSION"
+    else
+        echo "  ❌ Agent MCPエンドポイント応答なし"
+    fi
+else
+    echo "❌ 停止中"
+    if [ ! -z "$AGENT_PORT_STATUS" ]; then
+        echo "⚠️  ポート8002は他のプロセスが使用中:"
+        echo "$AGENT_PORT_STATUS" | awk 'NR>1 {print "  🔒 " $1 " (PID: " $2 ")"}'
+    fi
+fi
+
 # 全体サマリー
 echo ""
 echo "📋 サマリー"
@@ -128,7 +184,7 @@ fi
 echo ""
 echo "📝 ログファイル状態"
 echo "------------------"
-LOG_FILES=("/tmp/worklog-mcp-server.log" "/tmp/worklog-web-viewer.log" "/tmp/worklog-mcp-claude.log")
+LOG_FILES=("/tmp/worklog-mcp-server.log" "/tmp/worklog-web-viewer.log" "/tmp/worklog-agent-mcp.log" "/tmp/worklog-mcp-claude.log")
 for LOG_FILE in "${LOG_FILES[@]}"; do
     if [ -f "$LOG_FILE" ]; then
         SIZE=$(du -h "$LOG_FILE" | cut -f1)

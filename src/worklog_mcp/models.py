@@ -96,6 +96,61 @@ class SessionStatus(Enum):
     ERROR = "error"
 
 
+class MessageRole(Enum):
+    """会話メッセージの役割"""
+
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+
+@dataclass
+class ConversationMessage:
+    """会話メッセージ"""
+
+    message_id: str = field(default_factory=generate_id)
+    session_id: str = ""
+    role: MessageRole = MessageRole.USER
+    content: str = ""
+    timestamp: datetime = field(default_factory=datetime.now)
+    metadata: Dict[str, Any] = field(
+        default_factory=dict
+    )  # 追加情報（トークン数、実行時間等）
+
+
+@dataclass
+class ConversationHistory:
+    """会話履歴"""
+
+    session_id: str
+    messages: List[ConversationMessage] = field(default_factory=list)
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+
+    def add_message(
+        self, role: MessageRole, content: str, metadata: Dict[str, Any] = None
+    ) -> ConversationMessage:
+        """メッセージを追加"""
+        message = ConversationMessage(
+            session_id=self.session_id,
+            role=role,
+            content=content,
+            metadata=metadata or {},
+        )
+        self.messages.append(message)
+        self.updated_at = datetime.now()
+        return message
+
+    def get_recent_messages(self, limit: int = 10) -> List[ConversationMessage]:
+        """最新のメッセージを取得"""
+        return self.messages[-limit:] if self.messages else []
+
+    def clear_history(self):
+        """履歴をクリア"""
+        self.messages.clear()
+        self.updated_at = datetime.now()
+
+
 @dataclass
 class AgentConfig:
     """エージェント設定"""

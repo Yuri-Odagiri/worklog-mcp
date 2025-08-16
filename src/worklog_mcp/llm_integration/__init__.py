@@ -7,8 +7,11 @@ LLM Integration モジュール
 
 from .agent_executor import AgentExecutor
 from .session_manager import SessionManager
+from .mcp_config_generator import MCPConfigGenerator, mcp_config_generator
 
 __all__ = [
     "AgentExecutor",
     "SessionManager",
+    "MCPConfigGenerator",
+    "mcp_config_generator",
 ]

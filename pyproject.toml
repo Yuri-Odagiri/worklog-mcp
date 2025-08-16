@@ -21,11 +21,13 @@ dependencies = [
     "openai>=1.0.0",
     "Pillow>=10.0.0",
     "aiofiles>=23.0.0",
+    "PyYAML>=6.0.0",
 ]
 
 [project.scripts]
 worklog-mcp = "worklog_mcp.__main__:main"
 worklog-mcp-server = "worklog_mcp.mcp_server:main"
+worklog-agent-mcp = "worklog_agent_mcp.__main__:main"
 
 [tool.uv]
 dev-dependencies = [

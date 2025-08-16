@@ -1,0 +1,47 @@
+{
+  "mcpServers": {
+    "worklog-mcp-{agent_id}": {
+      "command": "uv",
+      "args": [
+        "run", 
+        "python", 
+        "-m", 
+        "worklog_mcp", 
+        "--project", 
+        "{project_path}",
+        "--transport", 
+        "stdio",
+        "--user",
+        "{user_id}",
+        "--agent-mode",
+        "{agent_id}"
+      ],
+      "env": {
+        "WORKLOG_AGENT_ID": "{agent_id}",
+        "WORKLOG_USER_ID": "{user_id}",
+        "WORKLOG_PROJECT_PATH": "{project_path}",
+        "WORKLOG_SESSION_ID": "{session_id}"
+      },
+      "disabled": false
+    }
+  },
+  "serverConfig": {
+    "timeout": 30000,
+    "retryAttempts": 3,
+    "enableLogging": true
+  },
+  "agentSpecific": {
+    "isolation": true,
+    "resourceLimits": {
+      "maxMemoryMB": 512,
+      "maxCpuPercent": 50,
+      "maxProcesses": 5
+    },
+    "permissions": {
+      "readOnly": false,
+      "allowNetworkAccess": true,
+      "allowFileSystem": true,
+      "restrictedPaths": []
+    }
+  }
+}

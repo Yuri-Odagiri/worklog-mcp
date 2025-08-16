@@ -7,7 +7,7 @@ import time
 from typing import Dict, Any, Optional, List
 import logging
 
-from ..models import AgentSession, SessionStatus, User
+from ..models import AgentSession, SessionStatus, User, ConversationHistory, MessageRole
 from .agent_executor import AgentExecutor
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,9 @@ class SessionManager:
         self.active_sessions: Dict[str, AgentSession] = {}
         self.session_executors: Dict[str, AgentExecutor] = {}
         self.session_locks: Dict[str, asyncio.Lock] = {}
+        self.conversation_histories: Dict[
+            str, ConversationHistory
+        ] = {}  # セッションID -> 会話履歴
         self.cleanup_task: Optional[asyncio.Task] = None
 
     async def start(self):
@@ -82,6 +85,11 @@ class SessionManager:
             self.session_executors[session.session_id] = executor
             self.session_locks[session.session_id] = asyncio.Lock()
 
+            # 会話履歴初期化
+            self.conversation_histories[session.session_id] = ConversationHistory(
+                session_id=session.session_id
+            )
+
             # LLMセッション開始
             llm_process_id = await executor.start_agent_session()
 
@@ -141,6 +149,88 @@ class SessionManager:
                 session.status = SessionStatus.ERROR
 
                 return {"success": False, "error": str(e)}
+
+    async def send_message_to_agent(
+        self, session_id: str, message: str
+    ) -> Dict[str, Any]:
+        """エージェントに会話メッセージを送信"""
+        if session_id not in self.active_sessions:
+            return {"success": False, "error": f"Session {session_id} not found"}
+
+        session = self.active_sessions[session_id]
+        executor = self.session_executors[session_id]
+        lock = self.session_locks[session_id]
+        conversation_history = self.conversation_histories.get(session_id)
+
+        async with lock:
+            try:
+                # セッション状態確認
+                if session.status != SessionStatus.ACTIVE:
+                    return {
+                        "success": False,
+                        "error": f"Session {session_id} is not active (status: {session.status.value})",
+                    }
+
+                # ユーザーメッセージを履歴に追加
+                if conversation_history:
+                    conversation_history.add_message(MessageRole.USER, message)
+
+                # メッセージ送信
+                result = await executor.send_message(
+                    message, session.claude_process_id, conversation_history
+                )
+
+                # 応答を履歴に追加
+                if result["success"] and conversation_history:
+                    conversation_history.add_message(
+                        MessageRole.ASSISTANT,
+                        result.get("response", ""),
+                        metadata=result.get("metadata", {}),
+                    )
+
+                # 最終アクティビティ時刻更新
+                session.last_activity = time.time()
+
+                logger.info(f"Message sent to session {session_id}: {message[:50]}...")
+                return result
+
+            except Exception as e:
+                logger.error(f"Message sending failed in session {session_id}: {e}")
+
+                # エラー状態に設定
+                session.status = SessionStatus.ERROR
+
+                return {"success": False, "error": str(e)}
+
+    async def get_conversation_history(
+        self, session_id: str, limit: int = 50
+    ) -> Optional[List[Dict[str, Any]]]:
+        """会話履歴を取得"""
+        if session_id not in self.conversation_histories:
+            return None
+
+        conversation_history = self.conversation_histories[session_id]
+        recent_messages = conversation_history.get_recent_messages(limit)
+
+        return [
+            {
+                "message_id": msg.message_id,
+                "role": msg.role.value,
+                "content": msg.content,
+                "timestamp": msg.timestamp.isoformat(),
+                "metadata": msg.metadata,
+            }
+            for msg in recent_messages
+        ]
+
+    async def clear_conversation_history(self, session_id: str) -> bool:
+        """会話履歴をクリア"""
+        if session_id not in self.conversation_histories:
+            return False
+
+        self.conversation_histories[session_id].clear_history()
+        logger.info(f"Conversation history cleared for session {session_id}")
+        return True
 
     async def stop_agent_session(self, session_id: str) -> bool:
         """エージェントセッション停止"""
@@ -236,6 +326,9 @@ class SessionManager:
 
         if session_id in self.session_locks:
             del self.session_locks[session_id]
+
+        if session_id in self.conversation_histories:
+            del self.conversation_histories[session_id]
 
     async def _periodic_cleanup(self):
         """定期的な非アクティブセッションクリーンアップ"""

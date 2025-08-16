@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "worklog-mcp": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "worklog_mcp", "--project", "{project_path}", "--transport", "stdio"],
+      "disabled": false
+    }
+  },
+  "defaultModel": "{model}",
+  "agentConfig": {
+    "personality": "{personality}",
+    "systemPrompt": "{system_prompt}",
+    "temperature": {temperature},
+    "maxTokens": {max_tokens}
+  },
+  "workspace": {
+    "rootPath": "{workspace_path}",
+    "name": "{workspace_name}"
+  },
+  "logging": {
+    "level": "info",
+    "enableTrace": false
+  }
+}

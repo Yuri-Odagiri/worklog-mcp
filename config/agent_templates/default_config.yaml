@@ -1,0 +1,63 @@
+# Agent Claude Code システム デフォルト設定値
+
+# Claude設定デフォルト値
+claude_defaults:
+  model: "claude-3-5-sonnet-20241022"
+  temperature: 0.7
+  max_tokens: 4096
+  timeout: 30000
+  retry_attempts: 3
+
+# エージェント設定デフォルト値
+agent_defaults:
+  personality: "professional"
+  language: "ja"
+  response_style: "concise"
+  enable_logging: true
+  max_session_duration: 3600  # 1時間
+  max_concurrent_sessions: 5
+
+# リソース制限デフォルト値
+resource_limits:
+  max_memory_mb: 512
+  max_cpu_percent: 50
+  max_processes: 5
+  max_file_size_mb: 100
+  max_network_requests_per_minute: 60
+
+# セキュリティ設定デフォルト値
+security_defaults:
+  enable_sandbox: true
+  allow_network_access: true
+  allow_file_system: true
+  restricted_paths:
+    - "/etc"
+    - "/var"
+    - "/usr/bin"
+    - "/bin"
+  allowed_extensions:
+    - ".txt"
+    - ".md"
+    - ".json"
+    - ".yaml"
+    - ".yml"
+    - ".py"
+    - ".js"
+    - ".ts"
+    - ".html"
+    - ".css"
+
+# ログ設定デフォルト値
+logging_defaults:
+  level: "info"
+  enable_trace: false
+  max_log_size_mb: 50
+  retention_days: 7
+  log_format: "json"
+
+# ワークスペース設定デフォルト値
+workspace_defaults:
+  auto_create: true
+  template_path: "config/workspace_templates"
+  backup_enabled: true
+  version_control: "git"

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 import logging
 
-from ..models import AgentConfig
+from ..models import AgentConfig, ConversationHistory, MessageRole
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +207,137 @@ class AgentExecutor:
 
             return {"success": False, "error": str(e), "execution_time": execution_time}
 
+    async def send_message(
+        self,
+        message: str,
+        session_id: str,
+        conversation_history: Optional[ConversationHistory] = None,
+    ) -> Dict[str, Any]:
+        """会話メッセージを送信して応答を取得"""
+        start_time = time.time()
+
+        try:
+            # プロセス状態確認
+            status = self.process_manager.get_process_status(session_id)
+            if not status or not status.get("is_running"):
+                return {
+                    "success": False,
+                    "error": f"{self.provider.upper()} session is not running",
+                    "response": "",
+                    "execution_time": time.time() - start_time,
+                }
+
+            # 会話履歴がある場合はコンテキストを構築
+            conversation_context = ""
+            if conversation_history and conversation_history.messages:
+                conversation_context = self._build_conversation_context(
+                    conversation_history
+                )
+
+            # プロバイダー別のメッセージ送信
+            if self.provider == "claude":
+                result = await self._send_claude_message(
+                    message, session_id, conversation_context
+                )
+            elif self.provider == "openai":
+                result = await self._send_openai_message(
+                    message, session_id, conversation_context
+                )
+            else:
+                # デフォルトはClaude形式
+                result = await self._send_claude_message(
+                    message, session_id, conversation_context
+                )
+
+            execution_time = time.time() - start_time
+
+            return {
+                "success": True,
+                "response": result.get("response", ""),
+                "error": None,
+                "execution_time": execution_time,
+                "metadata": result.get("metadata", {}),
+            }
+
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(f"Message sending failed: {e}")
+
+            return {
+                "success": False,
+                "error": str(e),
+                "response": "",
+                "execution_time": execution_time,
+            }
+
+    def _build_conversation_context(
+        self, conversation_history: ConversationHistory
+    ) -> str:
+        """会話履歴からコンテキストを構築"""
+        if not conversation_history.messages:
+            return ""
+
+        context_parts = []
+        recent_messages = conversation_history.get_recent_messages(
+            10
+        )  # 最新10メッセージ
+
+        for msg in recent_messages:
+            role_prefix = {
+                MessageRole.USER: "ユーザー",
+                MessageRole.ASSISTANT: "アシスタント",
+                MessageRole.SYSTEM: "システム",
+            }.get(msg.role, "Unknown")
+
+            context_parts.append(f"{role_prefix}: {msg.content}")
+
+        return "\n".join(context_parts)
+
+    async def _send_claude_message(
+        self, message: str, session_id: str, context: str = ""
+    ) -> Dict[str, Any]:
+        """Claude用メッセージ送信"""
+        # Claude Code形式でのメッセージ送信
+        full_message = message
+        if context:
+            full_message = (
+                f"以下は過去の会話です:\n{context}\n\n新しいメッセージ: {message}"
+            )
+
+        # 実際のClaude Code APIまたはプロセス通信を実装
+        # 現在は簡素化されたバージョン
+        response = await self.process_manager.send_command(session_id, full_message)
+
+        return {
+            "response": response or "応答を受信できませんでした",
+            "metadata": {
+                "provider": "claude",
+                "message_length": len(message),
+                "context_included": bool(context),
+            },
+        }
+
+    async def _send_openai_message(
+        self, message: str, session_id: str, context: str = ""
+    ) -> Dict[str, Any]:
+        """OpenAI用メッセージ送信（将来的な実装用）"""
+        # OpenAI API形式でのメッセージ送信
+        # 実装は将来的に行う
+        full_message = message
+        if context:
+            full_message = f"Context:\n{context}\n\nUser: {message}"
+
+        response = await self.process_manager.send_command(session_id, full_message)
+
+        return {
+            "response": response or "No response received",
+            "metadata": {
+                "provider": "openai",
+                "message_length": len(message),
+                "context_included": bool(context),
+            },
+        }
+
     async def stop_session(self, session_id: str) -> bool:
         """セッション終了"""
         try:
@@ -318,23 +449,9 @@ class AgentExecutor:
             }
         )
 
-        # 旧環境変数との互換性（Claude用）
-        if self.provider == "claude":
-            env.update(
-                {
-                    "CLAUDE_AGENT_ID": self.agent_config.agent_id,
-                    "CLAUDE_USER_ID": self.agent_config.user_id,
-                    "CLAUDE_SESSION_MODE": "agent",
-                }
-            )
-
         # ワークスペースパス
         if self.agent_config.workspace_path:
             env["LLM_WORKSPACE"] = self.agent_config.workspace_path
-            # Claude互換性
-            if self.provider == "claude":
-                env["CLAUDE_WORKSPACE"] = self.agent_config.workspace_path
-
         return env
 
     async def _cleanup_temp_files(self):
